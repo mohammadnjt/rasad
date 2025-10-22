@@ -1,0 +1,773 @@
+import { useState, useRef, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  Alert,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform, // <--- مطمئن شوید که Platform ایمپورت شده است
+  TextInput
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useStore } from '../store/useStore';
+import { translations } from '../constants/translations';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { 
+  User, 
+  Lock, 
+  Eye, 
+  EyeOff,
+  CheckSquare,
+  Square,
+  LogIn,
+  Shield
+} from 'lucide-react-native';
+
+const { width, height } = Dimensions.get('window');
+
+// ====================================================================
+// 1. کامپوننت CustomInput (خارج از LoginScreen)
+// ====================================================================
+const CustomInput = ({ 
+  label, 
+  value, 
+  onChangeText, 
+  error, 
+  icon: Icon,
+  secureTextEntry,
+  keyboardType,
+  animValue, 
+  isDarkMode, 
+  isRTL, 
+  showPassword, 
+  onToggleShowPassword 
+}) => (
+  <Animated.View
+    style={{
+      opacity: animValue, 
+      transform: [{
+        translateY: animValue.interpolate({
+          inputRange: [0, 1],
+          outputRange: [20, 0],
+        })
+      }],
+      marginBottom: 20,
+    }}
+  >
+    <Text style={[
+      styles.inputLabel, 
+      isDarkMode && styles.textDark,
+      isRTL && styles.rtlText
+    ]}>
+      {label}
+    </Text>
+    <View style={[
+      styles.inputWrapper, 
+      error && styles.inputWrapperError,
+      isDarkMode && styles.inputWrapperDark,
+      isRTL && styles.rtlInputWrapper
+    ]}>
+      <View style={isRTL ? styles.iconContainerRTL : styles.iconContainerLTR}>
+        <Icon size={20} color="#667eea" />
+      </View>
+      <TextInput
+        style={[
+          styles.input, 
+          isDarkMode && styles.inputDark, 
+          isRTL && styles.rtlTextInput 
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry && !showPassword}
+        placeholder={`${label} خود را وارد کنید`}
+        placeholderTextColor={isDarkMode ? '#666' : '#999'}
+        keyboardType={keyboardType || 'default'}
+      />
+      {secureTextEntry && (
+        <TouchableOpacity
+          style={styles.eyeButton}
+          onPress={onToggleShowPassword}
+        >
+          {showPassword ? (
+            <EyeOff size={20} color="#999" />
+          ) : (
+            <Eye size={20} color="#999" />
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
+    {error && <Text style={[styles.errorText, isRTL && styles.rtlText]}>{error}</Text>}
+  </Animated.View>
+);
+
+
+// ====================================================================
+// 2. کامپوننت اصلی LoginScreen
+// ====================================================================
+export default function LoginScreen() {
+  const router = useRouter();
+  const { language, isDarkMode, setUser } = useStore();
+  const t = translations[language];
+  const isRTL = language === 'fa'; 
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const logoScale = useRef(new Animated.Value(0.8)).current;
+  const inputAnims = useRef([new Animated.Value(0), new Animated.Value(0)]).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.stagger(150, [
+        Animated.spring(inputAnims[0], {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.spring(inputAnims[1], {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, []);
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!username.trim()) newErrors.username = t.required || 'الزامی';
+    if (!password.trim()) newErrors.password = t.required || 'الزامی';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // ====================================================================
+  // 3. تابع handleLogin با چک کردن Platform.OS اصلاح شد
+  // ====================================================================
+  const handleLogin = async () => {
+    if (!validateForm()) return;
+
+    setLoading(true);
+
+    setTimeout(async () => {
+      if (username === 'demo' && password === 'demo123') {
+        const user = {
+          username,
+          name: language === 'fa' ? 'کاربر آزمایشی' : 'Demo User',
+          email: 'demo@rasad.ir',
+        };
+
+        setUser(user);
+
+        if (rememberMe) {
+          await AsyncStorage.setItem('user', JSON.stringify(user));
+        }
+
+        // <--- شروع راه‌حل برای Alert موفقیت
+        const successTitle = t.success || '✓ موفق';
+        const successMessage = language === 'fa' ? 'ورود با موفقیت انجام شد' : 'Login successful';
+
+        if (Platform.OS === 'web') {
+          alert(`${successTitle}\n${successMessage}`); // استفاده از alert ساده مرورگر
+          router.replace('/(tabs)'); // ناوبری مستقیم
+        } else {
+          Alert.alert(
+            successTitle,
+            successMessage,
+            [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+          );
+        }
+        // ---> پایان راه‌حل
+        
+      } else {
+        
+        // <--- شروع راه‌حل برای Alert خطا
+        const errorTitle = t.error || '✕ خطا';
+        const errorMessage = t.loginFailed || 'نام کاربری یا رمز عبور اشتباه است';
+
+        if (Platform.OS === 'web') {
+          alert(`${errorTitle}\n${errorMessage}`); // استفاده از alert ساده مرورگر
+        } else {
+          Alert.alert(
+            errorTitle,
+            errorMessage
+          );
+        }
+        // ---> پایان راه‌حل
+      }
+      setLoading(false);
+    }, 1500);
+  };
+
+
+  return (
+    <View style={[styles.container, isDarkMode && styles.containerDark]}>
+      {/* Background Gradient */}
+      <LinearGradient
+        colors={
+          isDarkMode 
+            ? ['#1a1a2e', '#16213e', '#0f3460']
+            : ['#667eea', '#764ba2', '#f093fb']
+        }
+        style={styles.backgroundGradient}
+      />
+
+      {/* Decorative Circles */}
+      <Animated.View 
+        style={[
+          styles.decorativeCircle1,
+          { opacity: fadeAnim }
+        ]} 
+      />
+      <Animated.View 
+        style={[
+          styles.decorativeCircle2,
+          { opacity: fadeAnim }
+        ]} 
+      />
+
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo Section */}
+          <Animated.View 
+            style={[
+              styles.logoContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: logoScale }]
+              }
+            ]}
+          >
+            <View style={styles.logoCircle}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
+                style={styles.logoGradient}
+              >
+                <Shield size={64} color="#fff" strokeWidth={2} />
+              </LinearGradient>
+            </View>
+            <Text style={styles.logoTitle}>
+              {language === 'fa' ? 'سامانه رصد و پایش' : 'Monitoring System'}
+            </Text>
+            <Text style={styles.logoSubtitle}>
+              {language === 'fa' ? 'Threat Monitoring System' : 'Version 1.1'}
+            </Text>
+          </Animated.View>
+
+          {/* Form Card */}
+          <Animated.View 
+            style={[
+              styles.formCard,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            {/* Glass Effect Overlay */}
+            <View style={[styles.glassOverlay, isDarkMode && styles.glassOverlayDark]} />
+
+            <View style={styles.formContent}>
+              <View style={styles.formHeader}>
+                <Text style={[styles.formTitle, isDarkMode && styles.textDark, isRTL && styles.rtlText]}>
+                  {t.login || 'ورود به سامانه'}
+                </Text>
+                <Text style={[styles.formSubtitle, isDarkMode && styles.subtitleDark, isRTL && styles.rtlText]}>
+                  {language === 'fa' ? 'برای ادامه وارد شوید' : 'Sign in to continue'}
+                </Text>
+              </View>
+
+              {/* Username Input */}
+              <CustomInput
+                label={t.username || 'نام کاربری'}
+                value={username}
+                onChangeText={setUsername}
+                error={errors.username}
+                icon={User}
+                animValue={inputAnims[0]}
+                isDarkMode={isDarkMode}
+                isRTL={isRTL}
+              />
+
+              {/* Password Input */}
+              <CustomInput
+                label={t.password || 'رمز عبور'}
+                value={password}
+                onChangeText={setPassword}
+                error={errors.password}
+                icon={Lock}
+                secureTextEntry
+                animValue={inputAnims[1]}
+                isDarkMode={isDarkMode}
+                isRTL={isRTL}
+                showPassword={showPassword}
+                onToggleShowPassword={() => setShowPassword(!showPassword)}
+              />
+
+              {/* Remember Me */}
+              <TouchableOpacity
+                style={[styles.rememberContainer, isRTL && styles.rtlRow]} 
+                onPress={() => setRememberMe(!rememberMe)}
+              >
+                {rememberMe ? (
+                  <CheckSquare size={22} color="#667eea" strokeWidth={2.5} />
+                ) : (
+                  <Square size={22} color={isDarkMode ? '#666' : '#999'} strokeWidth={2} />
+                )}
+                <Text style={[styles.rememberText, isDarkMode && styles.textDark, isRTL && styles.rtlText, isRTL && styles.rtlMargin]}>
+                  {t.rememberMe || 'مرا به خاطر بسپار'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Login Button */}
+              <TouchableOpacity
+                style={styles.loginButton}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['#667eea', '#764ba2']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.loginGradient, isRTL && styles.rtlRow]}
+                >
+                  {loading ? (
+                    <Text style={[styles.loginButtonText, isRTL && styles.rtlText]}>
+                      {language === 'fa' ? 'در حال ورود...' : 'Loading...'}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={[styles.loginButtonText, isRTL && styles.rtlText]}>
+                        {t.loginButton || 'ورود'}
+                      </Text>
+                      <LogIn size={20} color="#fff" style={isRTL && styles.rtlMargin} /> 
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Demo Info */}
+              <View style={[styles.demoCard, isDarkMode && styles.demoCardDark]}>
+                <View style={[styles.demoHeader, isRTL && styles.rtlRow]}>
+                  <View style={[styles.demoBadge, isRTL && styles.rtlMargin]}>
+                    <Text style={styles.demoBadgeText}>DEMO</Text>
+                  </View>
+                  <Text style={[styles.demoTitle, isDarkMode && styles.textDark, isRTL && styles.rtlText]}>
+                    {language === 'fa' ? 'اطلاعات آزمایشی' : 'Demo Credentials'}
+                  </Text>
+                </View>
+                <View style={[styles.demoRow, isRTL && styles.rtlRow]}>
+                  <Text style={[styles.demoLabel, isDarkMode && styles.demoLabelDark, isRTL && styles.rtlText]}>
+                    {language === 'fa' ? 'نام کاربری:' : 'Username:'}
+                  </Text>
+                  <Text style={[styles.demoValue, isDarkMode && styles.demoValueDark]}>
+                    demo
+                  </Text>
+                </View>
+                <View style={[styles.demoRow, isRTL && styles.rtlRow]}>
+                  <Text style={[styles.demoLabel, isDarkMode && styles.demoLabelDark, isRTL && styles.rtlText]}>
+                    {language === 'fa' ? 'رمز عبور:' : 'Password:'}
+                  </Text>
+                  <Text style={[styles.demoValue, isDarkMode && styles.demoValueDark]}>
+                    demo123
+                  </Text>
+                </View>
+              </View>
+
+              {/* Forgot Password */}
+              <TouchableOpacity style={styles.forgotButton}>
+                <Text style={[styles.forgotText, isRTL && styles.rtlText]}>
+                  {language === 'fa' ? 'رمز عبور را فراموش کرده‌اید؟' : 'Forgot Password?'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* Footer */}
+          <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+            <Text style={[styles.footerText, isRTL && styles.rtlText]}>
+              {language === 'fa' 
+                ? 'نسخه ۱.۱ • توسعه یافته توسط شرکت فهام'
+                : 'Version 1.1 • Developed by Faham Company'}
+            </Text>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+// ====================================================================
+// 4. استایل‌ها (styles.input اصلاح شد)
+// ====================================================================
+const styles = StyleSheet.create({
+  // ... (سایر استایل‌ها)
+  container: {
+    flex: 1,
+    backgroundColor: '#667eea',
+  },
+  containerDark: {
+    backgroundColor: '#0a0a0a',
+  },
+  backgroundGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: '100%',
+  },
+  decorativeCircle1: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    top: -100,
+    right: -100,
+  },
+  decorativeCircle2: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    bottom: -50,
+    left: -50,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+    minHeight: height * 0.9,
+  },
+  
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+    marginTop: 60,
+  },
+  logoCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  logoGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  logoSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '500',
+  },
+  
+  formCard: {
+    borderRadius: 32,
+    overflow: 'hidden',
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  glassOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  glassOverlayDark: {
+    backgroundColor: 'rgba(26, 26, 26, 0.95)',
+  },
+  formContent: {
+    padding: 28,
+    position: 'relative',
+    zIndex: 1,
+  },
+  formHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  formTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  formSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  subtitleDark: {
+    color: '#999',
+  },
+  textDark: {
+    color: '#e0e0e0',
+  },
+  
+  // Input Styles
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    marginRight: 4, 
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputWrapperDark: {
+    backgroundColor: '#2a2a2a',
+  },
+  inputWrapperError: {
+    borderColor: '#DC3545',
+  },
+  iconContainerLTR: {
+    marginLeft: 12, 
+    marginRight: 8,
+  },
+  iconContainerRTL: {
+    marginRight: 12, 
+    marginLeft: 8, 
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    paddingVertical: 0,
+    textAlign: 'left', // Default LTR
+    // <--- شروع راه‌حل برای حذف خط آبی در وب
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none', 
+    }),
+    // ---> پایان راه‌حل
+  },
+  inputDark: {
+    color: '#e0e0e0',
+  },
+  eyeButton: {
+    padding: 8,
+  },
+  errorText: {
+    color: '#DC3545',
+    fontSize: 12,
+    marginTop: 6,
+    marginRight: 4, 
+  },
+  
+  // Remember Me
+  rememberContainer: {
+    flexDirection: 'row', 
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  rememberText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    marginRight: 8, 
+    textAlign: 'left', 
+  },
+
+  // Login Button
+  loginButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 20,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  loginGradient: {
+    flexDirection: 'row', 
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 8,
+  },
+  loginButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginLeft: 8, 
+    textAlign: 'left', 
+  },
+  
+  // Demo Card
+  demoCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  demoCardDark: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#3a3a3a',
+  },
+  demoHeader: {
+    flexDirection: 'row', 
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  demoBadge: {
+    backgroundColor: '#667eea',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8, 
+  },
+  demoBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  demoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'left', 
+  },
+  demoRow: {
+    flexDirection: 'row', 
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  demoLabel: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+    textAlign: 'left', 
+  },
+  demoLabelDark: {
+    color: '#999',
+  },
+  demoValue: {
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  demoValueDark: {
+    color: '#e0e0e0',
+    backgroundColor: '#1a1a1a',
+  },
+  
+  // Forgot Password
+  forgotButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  forgotText: {
+    fontSize: 14,
+    color: '#667eea',
+    fontWeight: '600',
+    textAlign: 'center', 
+  },
+  
+  // Footer
+  footer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  footerText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+
+  // RTL STYLES
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl', 
+  },
+  rtlInputWrapper: {
+    flexDirection: 'row-reverse',
+  },
+  rtlTextInput: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  rtlRow: {
+    flexDirection: 'row-reverse',
+  },
+  rtlMargin: {
+    marginRight: 0,
+    marginLeft: 8,
+  }
+});
