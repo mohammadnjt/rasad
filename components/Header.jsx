@@ -56,6 +56,8 @@ import { useStore } from '../store/useStore';
 import { translations } from '../constants/translations';
 import { Shield, Menu, Bell } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
 export default function Header() {
   const { language, isDarkMode } = useStore();
@@ -91,6 +93,15 @@ export default function Header() {
     ).start();
   }, []);
 
+  const router = useRouter();
+
+  const handleResetServerConfig = async () => {
+    console.log('Resetting server configuration...');
+    await AsyncStorage.removeItem('serverUrl');
+    await AsyncStorage.removeItem('version');
+    router.replace('/');
+  };
+
   return (
     <View style={styles.container}>
       {/* Background Gradient */}
@@ -115,6 +126,11 @@ export default function Header() {
         <TouchableOpacity 
           style={styles.iconButton}
           activeOpacity={0.7}
+          onPress={() => {
+            console.log('دکمه منو کلیک شد!'); // این باید در کنسول ظاهر شود
+            handleResetServerConfig();
+          }}
+          // onPress={handleResetServerConfig}
         >
           <View style={[styles.iconContainer, isDarkMode && styles.iconContainerDark]}>
             <Menu size={22} color="#fff" strokeWidth={2.5} />
@@ -176,6 +192,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     overflow: 'hidden',
+    zIndex: 1,
   },
   gradient: {
     position: 'absolute',
