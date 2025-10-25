@@ -5,6 +5,8 @@ export const useStore = create((set, get) => ({
   user: null,
   isLoggedIn: false,
   isDarkMode: false,
+  logo: '',
+  version: '1.0',
   language: 'fa',
   savedReports: [],
   reports: [],
@@ -28,6 +30,14 @@ export const useStore = create((set, get) => ({
   setLanguage: async (language) => {
     await AsyncStorage.setItem('language', language);
     set({ language });
+  },
+
+  setVersion: async (config) => {
+    await AsyncStorage.setItem('version', JSON.stringify(config));
+    set({
+      logo: `${config.serverUrl}${config.logo}`,
+      version:config.version,
+    });
   },
 
   addReport: (report) => {

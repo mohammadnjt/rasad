@@ -9,7 +9,7 @@ import {
   Animated,
   Dimensions,
   KeyboardAvoidingView,
-  Platform, // <--- مطمئن شوید که Platform ایمپورت شده است
+  Platform,
   TextInput
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -19,7 +19,7 @@ import { translations } from '../constants/translations';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   User, 
-  Lock, 
+  Phone, 
   Eye, 
   EyeOff,
   CheckSquare,
@@ -27,12 +27,10 @@ import {
   LogIn,
   Shield
 } from 'lucide-react-native';
+import { api } from '../hooks/api';
 
 const { width, height } = Dimensions.get('window');
 
-// ====================================================================
-// 1. کامپوننت CustomInput (خارج از LoginScreen)
-// ====================================================================
 const CustomInput = ({ 
   label, 
   value, 
@@ -87,6 +85,7 @@ const CustomInput = ({
         placeholder={`${label} خود را وارد کنید`}
         placeholderTextColor={isDarkMode ? '#666' : '#999'}
         keyboardType={keyboardType || 'default'}
+        autoCapitalize="none"
       />
       {secureTextEntry && (
         <TouchableOpacity
@@ -105,18 +104,14 @@ const CustomInput = ({
   </Animated.View>
 );
 
-
-// ====================================================================
-// 2. کامپوننت اصلی LoginScreen
-// ====================================================================
 export default function LoginScreen() {
   const router = useRouter();
-  const { language, isDarkMode, setUser } = useStore();
+  const { language, isDarkMode, logo, version } = useStore();
   const t = translations[language];
   const isRTL = language === 'fa'; 
 
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [mobile, setMobile] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -163,72 +158,79 @@ export default function LoginScreen() {
     ]).start();
   }, []);
 
+  const validateMobile = (mob) => {
+    const cleaned = mob.replace(/\D/g, '');
+    if (!cleaned) return t.required || 'الزامی';
+    if (!/^09\d{9}$/.test(cleaned)) {
+      return language === 'fa' 
+        ? 'شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود'
+        : 'Mobile must be 11 digits and start with 09';
+    }
+    return null;
+  };
+
   const validateForm = () => {
     const newErrors = {};
     if (!username.trim()) newErrors.username = t.required || 'الزامی';
-    if (!password.trim()) newErrors.password = t.required || 'الزامی';
+    const mobileError = validateMobile(mobile);
+    if (mobileError) newErrors.mobile = mobileError;
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // ====================================================================
-  // 3. تابع handleLogin با چک کردن Platform.OS اصلاح شد
-  // ====================================================================
   const handleLogin = async () => {
     if (!validateForm()) return;
 
     setLoading(true);
 
-    setTimeout(async () => {
-      if (username === 'demo' && password === 'demo123') {
-        const user = {
+    try {
+      // Call login API
+      const response = await api.login(username, mobile);
+
+      if (response.code === 2) {
+        // Code sent successfully - save temp data and navigate to verify
+        const tempData = {
           username,
-          name: language === 'fa' ? 'کاربر آزمایشی' : 'Demo User',
-          email: 'demo@rasad.ir',
+          mobile,
+          rememberMe
         };
+        
+        await AsyncStorage.setItem('tempLoginData', JSON.stringify(tempData));
 
-        setUser(user);
-
-        if (rememberMe) {
-          await AsyncStorage.setItem('user', JSON.stringify(user));
-        }
-
-        // <--- شروع راه‌حل برای Alert موفقیت
-        const successTitle = t.success || '✓ موفق';
-        const successMessage = language === 'fa' ? 'ورود با موفقیت انجام شد' : 'Login successful';
+        const successMessage = language === 'fa' 
+          ? 'کد تایید به شماره موبایل شما ارسال شد' 
+          : 'Verification code sent to your mobile';
 
         if (Platform.OS === 'web') {
-          alert(`${successTitle}\n${successMessage}`); // استفاده از alert ساده مرورگر
-          router.replace('/(tabs)'); // ناوبری مستقیم
+          alert(successMessage);
+          router.push('/verifyCode');
         } else {
           Alert.alert(
-            successTitle,
+            language === 'fa' ? '✓ موفق' : 'Success',
             successMessage,
-            [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+            [{ text: 'OK', onPress: () => router.push('/verifyCode') }]
           );
         }
-        // ---> پایان راه‌حل
-        
+      } else if (response.code === 1) {
+        // Direct login without verification
+        throw new Error(language === 'fa' ? 'لطفا از صفحه تایید کد استفاده کنید' : 'Please use verification code');
       } else {
-        
-        // <--- شروع راه‌حل برای Alert خطا
-        const errorTitle = t.error || '✕ خطا';
-        const errorMessage = t.loginFailed || 'نام کاربری یا رمز عبور اشتباه است';
-
-        if (Platform.OS === 'web') {
-          alert(`${errorTitle}\n${errorMessage}`); // استفاده از alert ساده مرورگر
-        } else {
-          Alert.alert(
-            errorTitle,
-            errorMessage
-          );
-        }
-        // ---> پایان راه‌حل
+        throw new Error(response.message || (language === 'fa' ? 'خطا در ورود' : 'Login failed'));
       }
-      setLoading(false);
-    }, 1500);
-  };
+    } catch (error) {
+      const errorTitle = t.error || 'خطا';
+      const errorMessage = error.message || (t.loginFailed || 'ورود ناموفق');
 
+      if (Platform.OS === 'web') {
+        alert(`${errorTitle}\n${errorMessage}`);
+      } else {
+        Alert.alert(errorTitle, errorMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={[styles.container, isDarkMode && styles.containerDark]}>
@@ -243,18 +245,8 @@ export default function LoginScreen() {
       />
 
       {/* Decorative Circles */}
-      <Animated.View 
-        style={[
-          styles.decorativeCircle1,
-          { opacity: fadeAnim }
-        ]} 
-      />
-      <Animated.View 
-        style={[
-          styles.decorativeCircle2,
-          { opacity: fadeAnim }
-        ]} 
-      />
+      <Animated.View style={[styles.decorativeCircle1, { opacity: fadeAnim }]} />
+      <Animated.View style={[styles.decorativeCircle2, { opacity: fadeAnim }]} />
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -269,10 +261,7 @@ export default function LoginScreen() {
           <Animated.View 
             style={[
               styles.logoContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ scale: logoScale }]
-              }
+              { opacity: fadeAnim, transform: [{ scale: logoScale }] }
             ]}
           >
             <View style={styles.logoCircle}>
@@ -280,7 +269,10 @@ export default function LoginScreen() {
                 colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
                 style={styles.logoGradient}
               >
-                <Shield size={64} color="#fff" strokeWidth={2} />
+                {logo ? 
+                  <img src={logo} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Logo" /> 
+                  : <Shield size={64} color="#fff" strokeWidth={2} />
+                }
               </LinearGradient>
             </View>
             <Text style={styles.logoTitle}>
@@ -295,13 +287,9 @@ export default function LoginScreen() {
           <Animated.View 
             style={[
               styles.formCard,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }]
-              }
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
             ]}
           >
-            {/* Glass Effect Overlay */}
             <View style={[styles.glassOverlay, isDarkMode && styles.glassOverlayDark]} />
 
             <View style={styles.formContent}>
@@ -326,19 +314,17 @@ export default function LoginScreen() {
                 isRTL={isRTL}
               />
 
-              {/* Password Input */}
+              {/* Mobile Input */}
               <CustomInput
-                label={t.password || 'رمز عبور'}
-                value={password}
-                onChangeText={setPassword}
-                error={errors.password}
-                icon={Lock}
-                secureTextEntry
+                label={t.mobile || 'شماره موبایل'}
+                value={mobile}
+                onChangeText={setMobile}
+                error={errors.mobile}
+                icon={Phone}
+                keyboardType="phone-pad"
                 animValue={inputAnims[1]}
                 isDarkMode={isDarkMode}
                 isRTL={isRTL}
-                showPassword={showPassword}
-                onToggleShowPassword={() => setShowPassword(!showPassword)}
               />
 
               {/* Remember Me */}
@@ -371,12 +357,12 @@ export default function LoginScreen() {
                 >
                   {loading ? (
                     <Text style={[styles.loginButtonText, isRTL && styles.rtlText]}>
-                      {language === 'fa' ? 'در حال ورود...' : 'Loading...'}
+                      {language === 'fa' ? 'در حال ارسال...' : 'Sending...'}
                     </Text>
                   ) : (
                     <>
                       <Text style={[styles.loginButtonText, isRTL && styles.rtlText]}>
-                        {t.loginButton || 'ورود'}
+                        {language === 'fa' ? 'دریافت کد' : 'Get Code'}
                       </Text>
                       <LogIn size={20} color="#fff" style={isRTL && styles.rtlMargin} /> 
                     </>
@@ -404,10 +390,10 @@ export default function LoginScreen() {
                 </View>
                 <View style={[styles.demoRow, isRTL && styles.rtlRow]}>
                   <Text style={[styles.demoLabel, isDarkMode && styles.demoLabelDark, isRTL && styles.rtlText]}>
-                    {language === 'fa' ? 'رمز عبور:' : 'Password:'}
+                    {language === 'fa' ? 'موبایل:' : 'Mobile:'}
                   </Text>
                   <Text style={[styles.demoValue, isDarkMode && styles.demoValueDark]}>
-                    demo123
+                    09123456789
                   </Text>
                 </View>
               </View>
@@ -415,7 +401,7 @@ export default function LoginScreen() {
               {/* Forgot Password */}
               <TouchableOpacity style={styles.forgotButton}>
                 <Text style={[styles.forgotText, isRTL && styles.rtlText]}>
-                  {language === 'fa' ? 'رمز عبور را فراموش کرده‌اید؟' : 'Forgot Password?'}
+                  {language === 'fa' ? 'مشکل در ورود؟' : 'Trouble logging in?'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -425,8 +411,8 @@ export default function LoginScreen() {
           <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
             <Text style={[styles.footerText, isRTL && styles.rtlText]}>
               {language === 'fa' 
-                ? 'نسخه ۱.۱ • توسعه یافته توسط شرکت فهام'
-                : 'Version 1.1 • Developed by Faham Company'}
+                ? `نسخه ${version} • توسعه یافته توسط فهام`
+                : `Version ${version} • Developed by Faham`}
             </Text>
           </Animated.View>
         </ScrollView>
@@ -435,339 +421,61 @@ export default function LoginScreen() {
   );
 }
 
-// ====================================================================
-// 4. استایل‌ها (styles.input اصلاح شد)
-// ====================================================================
 const styles = StyleSheet.create({
-  // ... (سایر استایل‌ها)
-  container: {
-    flex: 1,
-    backgroundColor: '#667eea',
-  },
-  containerDark: {
-    backgroundColor: '#0a0a0a',
-  },
-  backgroundGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: '100%',
-  },
-  decorativeCircle1: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    top: -100,
-    right: -100,
-  },
-  decorativeCircle2: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    bottom: -50,
-    left: -50,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-    minHeight: height * 0.9,
-  },
-  
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-    marginTop: 60,
-  },
-  logoCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    overflow: 'hidden',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  logoGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  logoSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '500',
-  },
-  
-  formCard: {
-    borderRadius: 32,
-    overflow: 'hidden',
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  glassOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  glassOverlayDark: {
-    backgroundColor: 'rgba(26, 26, 26, 0.95)',
-  },
-  formContent: {
-    padding: 28,
-    position: 'relative',
-    zIndex: 1,
-  },
-  formHeader: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  formTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 8,
-  },
-  formSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  subtitleDark: {
-    color: '#999',
-  },
-  textDark: {
-    color: '#e0e0e0',
-  },
-  
-  // Input Styles
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-    marginRight: 4, 
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    paddingHorizontal: 16,
-    height: 56,
-  },
-  inputWrapperDark: {
-    backgroundColor: '#2a2a2a',
-  },
-  inputWrapperError: {
-    borderColor: '#DC3545',
-  },
-  iconContainerLTR: {
-    marginLeft: 12, 
-    marginRight: 8,
-  },
-  iconContainerRTL: {
-    marginRight: 12, 
-    marginLeft: 8, 
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    paddingVertical: 0,
-    textAlign: 'left', // Default LTR
-    // <--- شروع راه‌حل برای حذف خط آبی در وب
-    ...(Platform.OS === 'web' && {
-      outlineStyle: 'none', 
-    }),
-    // ---> پایان راه‌حل
-  },
-  inputDark: {
-    color: '#e0e0e0',
-  },
-  eyeButton: {
-    padding: 8,
-  },
-  errorText: {
-    color: '#DC3545',
-    fontSize: 12,
-    marginTop: 6,
-    marginRight: 4, 
-  },
-  
-  // Remember Me
-  rememberContainer: {
-    flexDirection: 'row', 
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  rememberText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-    marginRight: 8, 
-    textAlign: 'left', 
-  },
-
-  // Login Button
-  loginButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 20,
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  loginGradient: {
-    flexDirection: 'row', 
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    gap: 8,
-  },
-  loginButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-    marginLeft: 8, 
-    textAlign: 'left', 
-  },
-  
-  // Demo Card
-  demoCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  demoCardDark: {
-    backgroundColor: '#2a2a2a',
-    borderColor: '#3a3a3a',
-  },
-  demoHeader: {
-    flexDirection: 'row', 
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  demoBadge: {
-    backgroundColor: '#667eea',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginLeft: 8, 
-  },
-  demoBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  demoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'left', 
-  },
-  demoRow: {
-    flexDirection: 'row', 
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  demoLabel: {
-    fontSize: 13,
-    color: '#666',
-    fontWeight: '500',
-    textAlign: 'left', 
-  },
-  demoLabelDark: {
-    color: '#999',
-  },
-  demoValue: {
-    fontSize: 13,
-    color: '#333',
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  demoValueDark: {
-    color: '#e0e0e0',
-    backgroundColor: '#1a1a1a',
-  },
-  
-  // Forgot Password
-  forgotButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  forgotText: {
-    fontSize: 14,
-    color: '#667eea',
-    fontWeight: '600',
-    textAlign: 'center', 
-  },
-  
-  // Footer
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  footerText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-
-  // RTL STYLES
-  rtlText: {
-    textAlign: 'right',
-    writingDirection: 'rtl', 
-  },
-  rtlInputWrapper: {
-    flexDirection: 'row-reverse',
-  },
-  rtlTextInput: {
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  rtlRow: {
-    flexDirection: 'row-reverse',
-  },
-  rtlMargin: {
-    marginRight: 0,
-    marginLeft: 8,
-  }
+  container: { flex: 1, backgroundColor: '#667eea' },
+  containerDark: { backgroundColor: '#0a0a0a' },
+  backgroundGradient: { position: 'absolute', left: 0, right: 0, top: 0, height: '100%' },
+  decorativeCircle1: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(255, 255, 255, 0.1)', top: -100, right: -100 },
+  decorativeCircle2: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255, 255, 255, 0.08)', bottom: -50, left: -50 },
+  keyboardView: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20, minHeight: height * 0.9 },
+  logoContainer: { alignItems: 'center', marginBottom: 40, marginTop: 60 },
+  logoCircle: { width: 120, height: 120, borderRadius: 60, overflow: 'hidden', marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 },
+  logoGradient: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  logoTitle: { fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 8, textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
+  logoSubtitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.85)', fontWeight: '500' },
+  formCard: { borderRadius: 32, overflow: 'hidden', marginBottom: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 12 },
+  glassOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 255, 255, 0.95)' },
+  glassOverlayDark: { backgroundColor: 'rgba(26, 26, 26, 0.95)' },
+  formContent: { padding: 28, position: 'relative', zIndex: 1 },
+  formHeader: { alignItems: 'center', marginBottom: 32 },
+  formTitle: { fontSize: 26, fontWeight: '700', color: '#333', marginBottom: 8 },
+  formSubtitle: { fontSize: 14, color: '#666', fontWeight: '500' },
+  subtitleDark: { color: '#999' },
+  textDark: { color: '#e0e0e0' },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginRight: 4 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 16, borderWidth: 2, borderColor: 'transparent', paddingHorizontal: 16, height: 56 },
+  inputWrapperDark: { backgroundColor: '#2a2a2a' },
+  inputWrapperError: { borderColor: '#DC3545' },
+  iconContainerLTR: { marginLeft: 12, marginRight: 8 },
+  iconContainerRTL: { marginRight: 12, marginLeft: 8 },
+  input: { flex: 1, fontSize: 16, color: '#333', paddingVertical: 0, textAlign: 'left', ...(Platform.OS === 'web' && { outlineStyle: 'none' }) },
+  inputDark: { color: '#e0e0e0' },
+  eyeButton: { padding: 8 },
+  errorText: { color: '#DC3545', fontSize: 12, marginTop: 6, marginRight: 4 },
+  rememberContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
+  rememberText: { fontSize: 14, color: '#333', fontWeight: '500', marginRight: 8, textAlign: 'left' },
+  loginButton: { borderRadius: 16, overflow: 'hidden', marginBottom: 20, shadowColor: '#667eea', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+  loginGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 8 },
+  loginButtonText: { fontSize: 18, fontWeight: '700', color: '#fff', marginLeft: 8, textAlign: 'left' },
+  demoCard: { backgroundColor: '#f8f9fa', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#e9ecef' },
+  demoCardDark: { backgroundColor: '#2a2a2a', borderColor: '#3a3a3a' },
+  demoHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  demoBadge: { backgroundColor: '#667eea', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginLeft: 8 },
+  demoBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  demoTitle: { fontSize: 14, fontWeight: '600', color: '#333', textAlign: 'left' },
+  demoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  demoLabel: { fontSize: 13, color: '#666', fontWeight: '500', textAlign: 'left' },
+  demoLabelDark: { color: '#999' },
+  demoValue: { fontSize: 13, color: '#333', fontWeight: '600', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
+  demoValueDark: { color: '#e0e0e0', backgroundColor: '#1a1a1a' },
+  forgotButton: { alignItems: 'center', paddingVertical: 8 },
+  forgotText: { fontSize: 14, color: '#667eea', fontWeight: '600', textAlign: 'center' },
+  footer: { alignItems: 'center', paddingVertical: 20 },
+  footerText: { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500', textAlign: 'center' },
+  rtlText: { textAlign: 'right', writingDirection: 'rtl' },
+  rtlInputWrapper: { flexDirection: 'row-reverse' },
+  rtlTextInput: { textAlign: 'right', writingDirection: 'rtl' },
+  rtlRow: { flexDirection: 'row-reverse' },
+  rtlMargin: { marginRight: 0, marginLeft: 8 }
 });

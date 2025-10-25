@@ -38,9 +38,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     const checkOnboarding = async () => {
-      const value = await AsyncStorage.getItem('isOnboarded');
+      const value = await AsyncStorage.getItem('version');
       console.log('Onboarding status from AsyncStorage:', value);
-      // setIsOnboarded(value === 'true');
+      setIsOnboarded(value);
     };
     checkOnboarding();
   }, []);
@@ -50,7 +50,7 @@ export default function RootLayout() {
     return (
       <GestureHandlerRootView style={{ flex: 1, direction: 'ltr' }}>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="index" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </GestureHandlerRootView>
@@ -72,7 +72,7 @@ export default function RootLayout() {
         </Stack>
       ) : (
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="index" options={{ headerShown: false }} />
         </Stack>
       )}
       <StatusBar style="auto" />

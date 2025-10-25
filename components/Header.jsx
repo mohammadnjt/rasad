@@ -1,72 +1,42 @@
-// import { View, Text, StyleSheet } from 'react-native';
-// import { useStore } from '../store/useStore';
-// import { translations } from '../constants/translations';
-
-// export default function Header() {
-//   const { language, isDarkMode } = useStore();
-//   const t = translations[language];
-
-//   return (
-//     <View style={[styles.container, isDarkMode && styles.containerDark]}>
-//       <Text style={[styles.title, isDarkMode && styles.titleDark]}>
-//         {t.appTitle}
-//       </Text>
-//       <Text style={[styles.version, isDarkMode && styles.versionDark]}>
-//         {t.version} 
-//       </Text>
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     backgroundColor: '#007BFF',
-//     paddingTop: 50,
-//     paddingBottom: 15,
-//     paddingHorizontal: 20,
-//     alignItems: 'center',
-//   },
-//   containerDark: {
-//     backgroundColor: '#0056b3',
-//   },
-//   title: {
-//     fontSize: 20,
-//     fontWeight: 'bold',
-//     color: '#ffffff',
-//     textAlign: 'center',
-//     writingDirection: 'rtl',
-//   },
-//   titleDark: {
-//     color: '#f0f0f0',
-//   },
-//   version: {
-//     fontSize: 12,
-//     color: '#ffffff',
-//     marginTop: 5,
-//     opacity: 0.8,
-//   },
-//   versionDark: {
-//     color: '#e0e0e0',
-//   },
-// });
-
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store/useStore';
 import { translations } from '../constants/translations';
 import { Shield, Menu, Bell } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import useSWR from 'swr';
+import { api } from '../hooks/api';
 
 export default function Header() {
-  const { language, isDarkMode } = useStore();
+  const { user, language, isDarkMode, logo, version } = useStore();
+  const [ config, setConfig ] = useState(null);
   const t = translations[language];
   const isRTL = language === 'fa';
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const checkVersion = async () => {
+      const value = await AsyncStorage.getItem('version');
+      setConfig(JSON.parse(value));
+    };
+    checkVersion();
+  }, []);
+
+  console.log('user finger on header::::', user)
+
+  const { data, isLoading } = useSWR(
+    'm_message',
+    () => user.finger ? api.getMessage(user.finger, Date.now()) : []
+  );
+
+  console.log('data message', data)
+
+  console.log('version on header:', config);
 
   useEffect(() => {
     // Fade in animation
@@ -149,7 +119,19 @@ export default function Header() {
               colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
               style={styles.logoGradient}
             >
-              <Shield size={32} color="#fff" strokeWidth={2.5} />
+              {config ? (
+                <img 
+                  src={logo} 
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain'
+                  }}
+                  alt="Logo"
+                />
+              ) : (
+                <Shield size={32} color="#fff" strokeWidth={2.5} />
+              )}
             </LinearGradient>
           </Animated.View>
 
@@ -159,14 +141,14 @@ export default function Header() {
             </Text>
             <View style={styles.versionBadge}>
               <Text style={styles.versionText}>
-                {t.version || 'v1.1'}
+                v{version}
               </Text>
             </View>
           </View>
         </View>
 
         {/* Right Side - Notifications */}
-        <TouchableOpacity 
+        {user && user.finger && <TouchableOpacity 
           style={styles.iconButton}
           activeOpacity={0.7}
         >
@@ -174,10 +156,10 @@ export default function Header() {
             <Bell size={22} color="#fff" strokeWidth={2.5} />
             {/* Notification Badge */}
             <View style={styles.notificationBadge}>
-              <Text style={styles.notificationText}>3</Text>
+              <Text style={styles.notificationText}>{data ? data.length : '0'}</Text>
             </View>
           </View>
-        </TouchableOpacity>
+        </TouchableOpacity>}
       </Animated.View>
 
       {/* Bottom Wave */}

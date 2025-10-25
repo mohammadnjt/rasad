@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useStore } from '../store/useStore';
 import {
   Server,
   Globe,
@@ -26,6 +27,7 @@ import {
 
 export default function ServerConfigScreen() {
   const router = useRouter();
+  const {setVersion} = useStore();
   const [serverUrl, setServerUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(null); // null, 'success', 'error'
@@ -110,51 +112,49 @@ export default function ServerConfigScreen() {
   };
 
   const testConnection = async (url) => {
-    try {
-      const fullUrl = `https://${url}/modules.php`;
-      const formData = new FormData();
-      formData.append('name', 'Icms');
-      formData.append('file', 'json'); // jsonBlob یک Blob یا File است
-      formData.append('op', 'm_version');
+  try {
+    const baseUrl = `https://${url}/modules.php`;
 
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const formData = new URLSearchParams();
+    formData.append('name', 'Icms');
+    formData.append('file', 'json');
+    formData.append('op', 'm_version');
 
-      const response = await fetch(fullUrl, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-        },
-        body: formData
-      });
-      clearTimeout(timeoutId);
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+      },
+      body: formData.toString()
+    });
 
-      if (response.ok) {
-        // await AsyncStorage.setItem('serverUrl', fullUrl);
-        // await AsyncStorage.setItem('version', res);
-        return { success: true, data: await response.json() };
-      } else {
-        return { 
-          success: false, 
-          error: `خطای سرور: ${response.status}` 
-        };
-      }
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        return { 
-          success: false, 
-          error: 'زمان اتصال به پایان رسید' 
-        };
-      }
+    // const text = await response.text();
+    // console.log('POST Response text:', text);
+
+    if (response.ok) {
+      // const jsonData = JSON.parse(text);
+      // console.log(jsonData)
+      const jsonData = await response.json();
+      setVersion({...jsonData, baseUrl, serverUrl: `https://${url}`})
+      // await AsyncStorage.setItem('version', JSON.stringify({...jsonData, baseUrl, serverUrl: `https://${url}`}));
+
+      return { success: true, data: jsonData };
+    } else {
       return { 
         success: false, 
-        error: 'عدم اتصال به سرور' 
+        error: `خطای سرور: ${response.status}`
       };
     }
-  };
-
+  } catch (error) {
+    console.error('Full error:', error);
+    return { 
+      success: false, 
+      error: 'عدم اتصال به سرور',
+      details: error.message
+    };
+  }
+};
   const handleConnect = async () => {
     setError('');
     setConnectionStatus(null);
@@ -185,10 +185,7 @@ export default function ServerConfigScreen() {
       setConnectionStatus('success');
       
       // Save to storage
-      try {
-        await AsyncStorage.setItem('serverUrl', validation.cleanUrl);
-        await AsyncStorage.setItem('version', JSON.stringify(result.data));
-        
+      try {       
         // Success animation
         setTimeout(() => {
           Alert.alert(
