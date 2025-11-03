@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store/useStore';
 import { translations } from '../constants/translations';
@@ -27,16 +28,10 @@ export default function Header() {
     checkVersion();
   }, []);
 
-  console.log('user finger on header::::', user)
-
   const { data, isLoading } = useSWR(
     'm_message',
-    () => user.finger ? api.getMessage(user.finger, Date.now()) : []
+    () => user?.finger ? api.getMessage(user.finger, Date.now()) : []
   );
-
-  console.log('data message', data)
-
-  console.log('version on header:', config);
 
   useEffect(() => {
     // Fade in animation
@@ -50,7 +45,7 @@ export default function Header() {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.1,
+          toValue: 1.05,
           duration: 2000,
           useNativeDriver: true,
         }),
@@ -74,19 +69,19 @@ export default function Header() {
 
   return (
     <View style={styles.container}>
-      {/* Background Gradient */}
+      {/* Background Gradient - Professional */}
       <LinearGradient
         colors={
           isDarkMode
-            ? ['#1a1a2e', '#16213e']
-            : ['#667eea', '#764ba2']
+            ? ['#1a1d29', '#212529', '#2d3139']
+            : ['#4A90E2', '#357ABD', '#2C5F94']
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       />
 
-      {/* Decorative circles */}
+      {/* Decorative circles - More subtle */}
       <View style={styles.decorativeCircle1} />
       <View style={styles.decorativeCircle2} />
       <View style={styles.decorativeCircle3} />
@@ -96,18 +91,14 @@ export default function Header() {
         <TouchableOpacity 
           style={styles.iconButton}
           activeOpacity={0.7}
-          onPress={() => {
-            console.log('دکمه منو کلیک شد!'); // این باید در کنسول ظاهر شود
-            handleResetServerConfig();
-          }}
-          // onPress={handleResetServerConfig}
+          onPress={handleResetServerConfig}
         >
           <View style={[styles.iconContainer, isDarkMode && styles.iconContainerDark]}>
-            <Menu size={22} color="#fff" strokeWidth={2.5} />
+            <Menu size={20} color="#fff" strokeWidth={2.5} />
           </View>
         </TouchableOpacity>
 
-        {/* Center - Logo & Title */}
+        {/* Center - Logo & Version */}
         <View style={styles.centerContent}>
           <Animated.View 
             style={[
@@ -116,56 +107,49 @@ export default function Header() {
             ]}
           >
             <LinearGradient
-              colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
+              colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
               style={styles.logoGradient}
             >
-              {config ? (
-                <img 
-                  src={logo} 
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain'
-                  }}
-                  alt="Logo"
+              {logo ? (
+                <Image 
+                  source={logo} 
+                  style={styles.logoImage}
+                  contentFit="contain"
+                  transition={300}
                 />
               ) : (
-                <Shield size={32} color="#fff" strokeWidth={2.5} />
+                <Shield size={28} color="#fff" strokeWidth={2.5} />
               )}
             </LinearGradient>
           </Animated.View>
 
-          <View style={styles.titleContainer}>
-            <Text style={[styles.title, isRTL && styles.rtl]}>
-              {t.appTitle || 'سامانه رصد'}
+          <View style={styles.versionContainer}>
+            <Text style={styles.versionText}>
+              v{version || '1.1'}
             </Text>
-            <View style={styles.versionBadge}>
-              <Text style={styles.versionText}>
-                v{version}
-              </Text>
-            </View>
           </View>
         </View>
 
         {/* Right Side - Notifications */}
-        {user && user.finger && <TouchableOpacity 
-          style={styles.iconButton}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.iconContainer, isDarkMode && styles.iconContainerDark]}>
-            <Bell size={22} color="#fff" strokeWidth={2.5} />
-            {/* Notification Badge */}
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationText}>{data ? data.length : '0'}</Text>
+        {user?.finger && (
+          <TouchableOpacity 
+            style={styles.iconButton}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconContainer, isDarkMode && styles.iconContainerDark]}>
+              <Bell size={20} color="#fff" strokeWidth={2.5} />
+              {/* Notification Badge */}
+              {data && data.length > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationText}>
+                    {data.length > 9 ? '9+' : data.length}
+                  </Text>
+                </View>
+              )}
             </View>
-          </View>
-        </TouchableOpacity>}
+          </TouchableOpacity>
+        )}
       </Animated.View>
-
-      {/* Bottom Wave */}
-      <View style={styles.waveContainer}>
-        <View style={[styles.wave, isDarkMode && styles.waveDark]} />
-      </View>
     </View>
   );
 }
@@ -174,7 +158,8 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     overflow: 'hidden',
-    zIndex: 1,
+    zIndex: 1000,
+    minHeight: 100,
   },
   gradient: {
     position: 'absolute',
@@ -184,87 +169,90 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   
-  // Decorative Circles
+  // Decorative Circles - More subtle and professional
   decorativeCircle1: {
     position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    top: -50,
-    right: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    top: -40,
+    right: -20,
   },
   decorativeCircle2: {
     position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    top: 30,
-    left: -20,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    top: 20,
+    left: -15,
   },
   decorativeCircle3: {
     position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    bottom: 20,
-    right: 60,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    bottom: 15,
+    right: 40,
   },
   
-  // Content
+  // Content - Responsive
   content: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: 45, // Reduced for better mobile experience
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     position: 'relative',
     zIndex: 2,
+    minHeight: 100,
   },
   
   // Icon Buttons
   iconButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
+    zIndex: 10,
   },
   iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  iconContainerDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  
+  // Center Content - Improved responsiveness
+  centerContent: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+  },
+  logoContainer: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  iconContainerDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  
-  // Center Content
-  centerContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  logoContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
   },
   logoGradient: {
     width: '100%',
@@ -272,73 +260,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  logoImage: {
+    width: '80%',
+    height: '80%',
+  },
   
-  // Title
-  titleContainer: {
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-    marginBottom: 4,
-  },
-  rtl: {
-    writingDirection: 'rtl',
-  },
-  versionBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  // Version - Clean and professional
+  versionContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   versionText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     color: '#ffffff',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   
-  // Notification Badge
+  // Notification Badge - Improved
   notificationBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: -3,
+    right: -3,
     backgroundColor: '#f5576c',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#667eea',
+    borderWidth: 1.5,
+    borderColor: '#4A90E2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   notificationText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
-  },
-  
-  // Wave Effect
-  waveContainer: {
-    position: 'relative',
-    height: 20,
-    overflow: 'hidden',
-  },
-  wave: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    backgroundColor: '#f5f5f5',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-  },
-  waveDark: {
-    backgroundColor: '#0a0a0a',
+    lineHeight: 12,
   },
 });

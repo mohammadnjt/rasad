@@ -7,7 +7,8 @@ import {
   Alert,
   Animated,
   Platform,
-  TextInput
+  TextInput,
+  KeyboardAvoidingView
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -21,7 +22,8 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  ArrowRight
+  ArrowLeft,
+  Clock
 } from 'lucide-react-native';
 
 // Generate unique finger ID
@@ -41,7 +43,7 @@ export default function VerifyCodeScreen() {
   const [code, setCode] = useState(['', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [resendTimer, setResendTimer] = useState(120); // 2 minutes
+  const [resendTimer, setResendTimer] = useState(120);
   const [canResend, setCanResend] = useState(false);
   const [finger] = useState(generateFinger());
 
@@ -50,8 +52,8 @@ export default function VerifyCodeScreen() {
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function VerifyCodeScreen() {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 600,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
@@ -68,23 +70,13 @@ export default function VerifyCodeScreen() {
         tension: 40,
         useNativeDriver: true,
       }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
     ]).start();
-
-    // Pulse animation for icon
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
 
     // Timer countdown
     const timer = setInterval(() => {
@@ -111,7 +103,6 @@ export default function VerifyCodeScreen() {
   };
 
   const handleCodeChange = (text, index) => {
-    // Only allow numbers
     const numericText = text.replace(/[^0-9]/g, '');
     
     if (numericText.length > 1) return;
@@ -154,11 +145,9 @@ export default function VerifyCodeScreen() {
     setError('');
 
     try {
-      // Call verify API
       const response = await api.verify(finger, fullCode);
 
       if (response.code === 1) {
-        // Success - save user and navigate
         const user = {
           username: response.username || 'user',
           name: response.name || (language === 'fa' ? 'کاربر' : 'User'),
@@ -172,7 +161,6 @@ export default function VerifyCodeScreen() {
         await AsyncStorage.setItem('user', JSON.stringify(user));
         await AsyncStorage.setItem('finger', finger);
 
-        // Success animation and navigate
         if (Platform.OS === 'web') {
           alert(language === 'fa' ? 'ورود موفقیت‌آمیز' : 'Login successful');
           router.replace('/(tabs)/home');
@@ -203,7 +191,6 @@ export default function VerifyCodeScreen() {
     setError('');
 
     try {
-      // Get username and mobile from navigation params or storage
       const userDataStr = await AsyncStorage.getItem('tempLoginData');
       if (!userDataStr) {
         throw new Error(language === 'fa' ? 'اطلاعات ورود یافت نشد' : 'Login data not found');
@@ -216,7 +203,6 @@ export default function VerifyCodeScreen() {
         setResendTimer(120);
         setCanResend(false);
         
-        // Restart timer
         const timer = setInterval(() => {
           setResendTimer((prev) => {
             if (prev <= 1) {
@@ -252,96 +238,105 @@ export default function VerifyCodeScreen() {
 
   return (
     <View style={[styles.container, isDarkMode && styles.containerDark]}>
-      {/* Background Gradient */}
+      {/* Background Gradient - Subtle */}
       <LinearGradient
         colors={
           isDarkMode
-            ? ['#1a1a2e', '#16213e', '#0f3460']
-            : ['#667eea', '#764ba2', '#f093fb']
+            ? ['#1a1d29', '#212529', '#2d3139']
+            : ['#f8f9fa', '#e9ecef', '#dee2e6']
         }
         style={styles.backgroundGradient}
       />
 
-      {/* Decorative Circles */}
-      <Animated.View style={[styles.decorativeCircle1, { opacity: fadeAnim }]} />
-      <Animated.View style={[styles.decorativeCircle2, { opacity: fadeAnim }]} />
-
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
       >
-        {/* Icon */}
         <Animated.View
           style={[
-            styles.iconContainer,
-            { transform: [{ scale: pulseAnim }] }
+            styles.content,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
           ]}
         >
-          <LinearGradient
-            colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
-            style={styles.iconGradient}
+          {/* Header Section */}
+          <View style={styles.header}>
+            <Animated.View
+              style={[
+                styles.iconContainer,
+                { transform: [{ scale: scaleAnim }] }
+              ]}
+            >
+              <LinearGradient
+                colors={['#4A90E2', '#357ABD']}
+                style={styles.iconGradient}
+              >
+                <KeyRound size={48} color="#fff" strokeWidth={2.5} />
+              </LinearGradient>
+            </Animated.View>
+
+            <Text style={[styles.title, isDarkMode && styles.titleDark]}>
+              {language === 'fa' ? 'تایید کد امنیتی' : 'Verify Security Code'}
+            </Text>
+            <Text style={[styles.subtitle, isDarkMode && styles.subtitleDark]}>
+              {language === 'fa'
+                ? 'کد ۵ رقمی ارسال شده به موبایل خود را وارد نمایید'
+                : 'Enter the 5-digit code sent to your mobile'}
+            </Text>
+          </View>
+
+          {/* Main Card */}
+          <Animated.View
+            style={[
+              styles.mainCard,
+              isDarkMode && styles.mainCardDark,
+              { transform: [{ translateX: shakeAnim }] }
+            ]}
           >
-            <KeyRound size={64} color="#fff" strokeWidth={2} />
-          </LinearGradient>
-        </Animated.View>
+            {/* Code Inputs */}
+            <View style={styles.codeSection}>
+              <View style={styles.codeInputsContainer}>
+                {code.map((digit, index) => (
+                  <TextInput
+                    key={index}
+                    ref={(ref) => (inputRefs.current[index] = ref)}
+                    style={[
+                      styles.codeInput,
+                      digit && styles.codeInputFilled,
+                      isDarkMode && styles.codeInputDark,
+                      error && styles.codeInputError
+                    ]}
+                    value={digit}
+                    onChangeText={(text) => handleCodeChange(text, index)}
+                    onKeyPress={(e) => handleKeyPress(e, index)}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    selectTextOnFocus
+                    editable={!loading}
+                  />
+                ))}
+              </View>
 
-        {/* Title */}
-        <Text style={[styles.title, isRTL && styles.rtl]}>
-          {language === 'fa' ? 'تایید کد' : 'Verify Code'}
-        </Text>
-        <Text style={[styles.subtitle, isRTL && styles.rtl]}>
-          {language === 'fa'
-            ? 'کد ۵ رقمی ارسال شده را وارد کنید'
-            : 'Enter the 5-digit code sent to you'}
-        </Text>
-
-        {/* Code Inputs Card */}
-        <Animated.View
-          style={[
-            styles.codeCard,
-            { transform: [{ translateX: shakeAnim }] }
-          ]}
-        >
-          <View style={[styles.glassOverlay, isDarkMode && styles.glassOverlayDark]} />
-
-          <View style={styles.codeContent}>
-            <View style={styles.codeInputsContainer}>
-              {code.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={[
-                    styles.codeInput,
-                    digit && styles.codeInputFilled,
-                    isDarkMode && styles.codeInputDark,
-                    error && styles.codeInputError
-                  ]}
-                  value={digit}
-                  onChangeText={(text) => handleCodeChange(text, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  selectTextOnFocus
-                  editable={!loading}
-                />
-              ))}
+              {error && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle size={14} color="#dc3545" />
+                  <Text style={[styles.errorText, isRTL && styles.rtlText]}>
+                    {error}
+                  </Text>
+                </View>
+              )}
             </View>
 
-            {error && (
-              <View style={styles.errorContainer}>
-                <AlertCircle size={16} color="#DC3545" />
-                <Text style={[styles.errorText, isRTL && styles.rtl]}>{error}</Text>
-              </View>
-            )}
-
-            {/* Timer */}
-            <View style={styles.timerContainer}>
-              <Text style={[styles.timerText, isDarkMode && styles.timerTextDark, isRTL && styles.rtl]}>
+            {/* Timer Section */}
+            <View style={[styles.timerSection, isDarkMode && styles.timerSectionDark]}>
+              <Clock size={16} color={resendTimer > 30 ? '#28a745' : '#dc3545'} />
+              <Text style={[
+                styles.timerText,
+                isDarkMode && styles.timerTextDark,
+                resendTimer <= 30 && styles.timerTextWarning
+              ]}>
                 {language === 'fa'
                   ? `زمان باقی‌مانده: ${formatTime(resendTimer)}`
                   : `Time remaining: ${formatTime(resendTimer)}`}
@@ -350,27 +345,31 @@ export default function VerifyCodeScreen() {
 
             {/* Verify Button */}
             <TouchableOpacity
-              style={styles.verifyButton}
+              style={[styles.verifyButton, (loading || code.join('').length !== 5) && styles.verifyButtonDisabled]}
               onPress={() => handleVerify()}
               disabled={loading || code.join('').length !== 5}
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={loading || code.join('').length !== 5 ? ['#999', '#666'] : ['#667eea', '#764ba2']}
+                colors={
+                  loading || code.join('').length !== 5 
+                    ? ['#adb5bd', '#adb5bd'] 
+                    : ['#4A90E2', '#357ABD']
+                }
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                end={{ x: 1, y: 0 }}
                 style={styles.verifyGradient}
               >
                 {loading ? (
                   <Text style={styles.verifyText}>
-                    {language === 'fa' ? 'در حال تایید...' : 'Verifying...'}
+                    {language === 'fa' ? 'در حال بررسی...' : 'Verifying...'}
                   </Text>
                 ) : (
                   <>
                     <Text style={styles.verifyText}>
-                      {language === 'fa' ? 'تایید' : 'Verify'}
+                      {language === 'fa' ? 'تایید کد' : 'Verify Code'}
                     </Text>
-                    <CheckCircle2 size={20} color="#fff" />
+                    <CheckCircle2 size={18} color="#fff" />
                   </>
                 )}
               </LinearGradient>
@@ -383,48 +382,41 @@ export default function VerifyCodeScreen() {
               disabled={!canResend || loading}
               activeOpacity={0.7}
             >
-              <RefreshCw size={16} color={canResend ? '#667eea' : '#999'} />
+              <RefreshCw size={16} color={canResend ? '#4A90E2' : '#adb5bd'} />
               <Text style={[
                 styles.resendText,
                 isDarkMode && styles.resendTextDark,
                 !canResend && styles.resendTextDisabled,
-                isRTL && styles.rtl
+                isRTL && styles.rtlText
               ]}>
                 {language === 'fa' ? 'ارسال مجدد کد' : 'Resend Code'}
               </Text>
             </TouchableOpacity>
+          </Animated.View>
 
-            {/* Back Button */}
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-              activeOpacity={0.7}
-            >
-              <ArrowRight size={18} color="#667eea" />
-              <Text style={[styles.backText, isRTL && styles.rtl]}>
-                {language === 'fa' ? 'بازگشت' : 'Back'}
-              </Text>
-            </TouchableOpacity>
+          {/* Info Card */}
+          <View style={[styles.infoCard, isDarkMode && styles.infoCardDark]}>
+            <Shield size={18} color="#4A90E2" />
+            <Text style={[styles.infoText, isDarkMode && styles.infoTextDark, isRTL && styles.rtlText]}>
+              {language === 'fa'
+                ? 'کد تایید به شماره موبایل ثبت شده شما ارسال گردیده است'
+                : 'Verification code has been sent to your registered mobile number'}
+            </Text>
           </View>
+
+          {/* Back Button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <ArrowLeft size={18} color={isDarkMode ? '#adb5bd' : '#6c757d'} />
+            <Text style={[styles.backText, isDarkMode && styles.backTextDark, isRTL && styles.rtlText]}>
+              {language === 'fa' ? 'بازگشت به صفحه ورود' : 'Back to Login'}
+            </Text>
+          </TouchableOpacity>
         </Animated.View>
-
-        {/* Info Card */}
-        <View style={[styles.infoCard, isDarkMode && styles.infoCardDark]}>
-          <Shield size={20} color="#667eea" />
-          <Text style={[styles.infoText, isDarkMode && styles.infoTextDark, isRTL && styles.rtl]}>
-            {language === 'fa'
-              ? 'کد تایید به شماره موبایل شما ارسال شده است'
-              : 'Verification code has been sent to your mobile'}
-          </Text>
-        </View>
-
-        {/* Footer */}
-        <Text style={[styles.footerText, isRTL && styles.rtl]}>
-          {language === 'fa'
-            ? 'کد را دریافت نکردید؟ پس از اتمام زمان مجددا ارسال کنید'
-            : "Didn't receive the code? Resend after timer ends"}
-        </Text>
-      </Animated.View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -432,10 +424,10 @@ export default function VerifyCodeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#667eea',
+    backgroundColor: '#f8f9fa',
   },
   containerDark: {
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#1a1d29',
   },
   backgroundGradient: {
     position: 'absolute',
@@ -444,43 +436,34 @@ const styles = StyleSheet.create({
     top: 0,
     height: '100%',
   },
-  decorativeCircle1: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    top: -100,
-    right: -100,
-  },
-  decorativeCircle2: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    bottom: -50,
-    left: -50,
+  keyboardView: {
+    flex: 1,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
 
-  // Icon
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    overflow: 'hidden',
-    alignSelf: 'center',
+  // Header
+  header: {
+    alignItems: 'center',
     marginBottom: 32,
+  },
+  iconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
   },
   iconGradient: {
     width: '100%',
@@ -488,80 +471,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // Title
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
+    color: '#212529',
+    marginBottom: 8,
     textAlign: 'center',
-    marginBottom: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  },
+  titleDark: {
+    color: '#e9ecef',
   },
   subtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 15,
+    color: '#6c757d',
     textAlign: 'center',
-    marginBottom: 40,
-    fontWeight: '500',
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  subtitleDark: {
+    color: '#adb5bd',
   },
 
-  // Code Card
-  codeCard: {
-    borderRadius: 32,
-    overflow: 'hidden',
-    marginBottom: 24,
+  // Main Card
+  mainCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 20,
   },
-  glassOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  glassOverlayDark: {
-    backgroundColor: 'rgba(26, 26, 26, 0.95)',
-  },
-  codeContent: {
-    padding: 32,
-    position: 'relative',
-    zIndex: 1,
+  mainCardDark: {
+    backgroundColor: '#212529',
   },
 
-  // Code Inputs
+  // Code Section
+  codeSection: {
+    marginBottom: 24,
+  },
   codeInputsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
+    marginBottom: 16,
   },
   codeInput: {
     width: 56,
     height: 64,
-    borderRadius: 16,
+    borderRadius: 12,
     backgroundColor: '#f8f9fa',
     borderWidth: 2,
-    borderColor: '#e0e0e0',
-    fontSize: 28,
+    borderColor: '#e9ecef',
+    fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
-    color: '#333',
+    color: '#212529',
+    ...(Platform.OS === 'web' && { outlineStyle: 'none' }),
   },
   codeInputFilled: {
-    borderColor: '#667eea',
+    borderColor: '#4A90E2',
     backgroundColor: '#fff',
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   codeInputDark: {
-    backgroundColor: '#2a2a2a',
-    borderColor: '#3a3a3a',
-    color: '#e0e0e0',
+    backgroundColor: '#2d3139',
+    borderColor: '#3a3f47',
+    color: '#e9ecef',
   },
   codeInputError: {
-    borderColor: '#DC3545',
+    borderColor: '#dc3545',
+    backgroundColor: '#fff5f5',
   },
 
   // Error
@@ -569,51 +555,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    paddingHorizontal: 16,
   },
   errorText: {
     fontSize: 13,
-    color: '#DC3545',
-    fontWeight: '600',
+    color: '#dc3545',
+    fontWeight: '500',
+    textAlign: 'center',
   },
 
-  // Timer
-  timerContainer: {
+  // Timer Section
+  timerSection: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f0f7ff',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     marginBottom: 24,
+  },
+  timerSectionDark: {
+    backgroundColor: '#1e2a3a',
   },
   timerText: {
     fontSize: 14,
-    color: '#666',
+    color: '#495057',
     fontWeight: '600',
   },
   timerTextDark: {
-    color: '#999',
+    color: '#adb5bd',
+  },
+  timerTextWarning: {
+    color: '#dc3545',
   },
 
   // Verify Button
   verifyButton: {
-    borderRadius: 16,
+    borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 16,
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  verifyButtonDisabled: {
+    opacity: 0.6,
   },
   verifyGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 18,
+    paddingVertical: 16,
     gap: 8,
   },
   verifyText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: '#ffffff',
   },
 
   // Resend Button
@@ -623,21 +626,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    marginBottom: 12,
   },
   resendButtonDisabled: {
     opacity: 0.5,
   },
   resendText: {
     fontSize: 14,
-    color: '#667eea',
+    color: '#4A90E2',
     fontWeight: '600',
   },
   resendTextDark: {
-    color: '#667eea',
+    color: '#6ca8e8',
   },
   resendTextDisabled: {
-    color: '#999',
+    color: '#adb5bd',
+  },
+
+  // Info Card
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#f0f7ff',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#d0e7ff',
+  },
+  infoCardDark: {
+    backgroundColor: '#1e2a3a',
+    borderColor: '#2d3e50',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#495057',
+    lineHeight: 20,
+  },
+  infoTextDark: {
+    color: '#adb5bd',
   },
 
   // Back Button
@@ -650,45 +678,15 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 14,
-    color: '#667eea',
+    color: '#6c757d',
     fontWeight: '600',
   },
-
-  // Info Card
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 24,
-  },
-  infoCardDark: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  infoTextDark: {
-    color: 'rgba(255, 255, 255, 0.9)',
+  backTextDark: {
+    color: '#adb5bd',
   },
 
-  // Footer
-  footerText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-
-  // RTL
-  rtl: {
+  // RTL Support
+  rtlText: {
     textAlign: 'right',
-    writingDirection: 'rtl',
   },
 });

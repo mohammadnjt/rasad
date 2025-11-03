@@ -12,6 +12,7 @@ import {
   Platform,
   TextInput
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store/useStore';
@@ -24,12 +25,13 @@ import {
   EyeOff,
   CheckSquare,
   Square,
-  LogIn,
-  Shield
+  ArrowRight,
+  Shield,
+  Info
 } from 'lucide-react-native';
 import { api } from '../hooks/api';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 const CustomInput = ({ 
   label, 
@@ -39,27 +41,15 @@ const CustomInput = ({
   icon: Icon,
   secureTextEntry,
   keyboardType,
-  animValue, 
   isDarkMode, 
   isRTL, 
   showPassword, 
   onToggleShowPassword 
 }) => (
-  <Animated.View
-    style={{
-      opacity: animValue, 
-      transform: [{
-        translateY: animValue.interpolate({
-          inputRange: [0, 1],
-          outputRange: [20, 0],
-        })
-      }],
-      marginBottom: 20,
-    }}
-  >
+  <View style={styles.inputSection}>
     <Text style={[
       styles.inputLabel, 
-      isDarkMode && styles.textDark,
+      isDarkMode && styles.inputLabelDark,
       isRTL && styles.rtlText
     ]}>
       {label}
@@ -67,11 +57,10 @@ const CustomInput = ({
     <View style={[
       styles.inputWrapper, 
       error && styles.inputWrapperError,
-      isDarkMode && styles.inputWrapperDark,
-      isRTL && styles.rtlInputWrapper
+      isDarkMode && styles.inputWrapperDark
     ]}>
-      <View style={isRTL ? styles.iconContainerRTL : styles.iconContainerLTR}>
-        <Icon size={20} color="#667eea" />
+      <View style={styles.iconContainer}>
+        <Icon size={20} color={error ? '#dc3545' : '#4A90E2'} />
       </View>
       <TextInput
         style={[
@@ -83,7 +72,7 @@ const CustomInput = ({
         onChangeText={onChangeText}
         secureTextEntry={secureTextEntry && !showPassword}
         placeholder={`${label} خود را وارد کنید`}
-        placeholderTextColor={isDarkMode ? '#666' : '#999'}
+        placeholderTextColor={isDarkMode ? '#6c757d' : '#adb5bd'}
         keyboardType={keyboardType || 'default'}
         autoCapitalize="none"
       />
@@ -93,15 +82,19 @@ const CustomInput = ({
           onPress={onToggleShowPassword}
         >
           {showPassword ? (
-            <EyeOff size={20} color="#999" />
+            <EyeOff size={18} color="#6c757d" />
           ) : (
-            <Eye size={20} color="#999" />
+            <Eye size={18} color="#6c757d" />
           )}
         </TouchableOpacity>
       )}
     </View>
-    {error && <Text style={[styles.errorText, isRTL && styles.rtlText]}>{error}</Text>}
-  </Animated.View>
+    {error && (
+      <Text style={[styles.errorText, isRTL && styles.rtlText]}>
+        {error}
+      </Text>
+    )}
+  </View>
 );
 
 export default function LoginScreen() {
@@ -117,44 +110,22 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
-  const inputAnims = useRef([new Animated.Value(0), new Animated.Value(0)]).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 600,
         useNativeDriver: true,
       }),
-      Animated.spring(logoScale, {
-        toValue: 1,
+      Animated.spring(slideAnim, {
+        toValue: 0,
         friction: 8,
         tension: 40,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.stagger(150, [
-        Animated.spring(inputAnims[0], {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.spring(inputAnims[1], {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-      ]),
     ]).start();
   }, []);
 
@@ -185,11 +156,9 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Call login API
       const response = await api.login(username, mobile);
 
       if (response.code === 2) {
-        // Code sent successfully - save temp data and navigate to verify
         const tempData = {
           username,
           mobile,
@@ -213,7 +182,6 @@ export default function LoginScreen() {
           );
         }
       } else if (response.code === 1) {
-        // Direct login without verification
         throw new Error(language === 'fa' ? 'لطفا از صفحه تایید کد استفاده کنید' : 'Please use verification code');
       } else {
         throw new Error(response.message || (language === 'fa' ? 'خطا در ورود' : 'Login failed'));
@@ -223,7 +191,8 @@ export default function LoginScreen() {
       const errorMessage = error.message || (t.loginFailed || 'ورود ناموفق');
 
       if (Platform.OS === 'web') {
-        alert(`${errorTitle}\n${errorMessage}`);
+        alert(`${errorTitle}
+${errorMessage}`);
       } else {
         Alert.alert(errorTitle, errorMessage);
       }
@@ -234,19 +203,15 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.container, isDarkMode && styles.containerDark]}>
-      {/* Background Gradient */}
+      {/* Background Gradient - Subtle */}
       <LinearGradient
         colors={
           isDarkMode 
-            ? ['#1a1a2e', '#16213e', '#0f3460']
-            : ['#667eea', '#764ba2', '#f093fb']
+            ? ['#1a1d29', '#212529', '#2d3139']
+            : ['#f8f9fa', '#e9ecef', '#dee2e6']
         }
         style={styles.backgroundGradient}
       />
-
-      {/* Decorative Circles */}
-      <Animated.View style={[styles.decorativeCircle1, { opacity: fadeAnim }]} />
-      <Animated.View style={[styles.decorativeCircle2, { opacity: fadeAnim }]} />
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -257,59 +222,53 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo Section */}
           <Animated.View 
             style={[
-              styles.logoContainer,
-              { opacity: fadeAnim, transform: [{ scale: logoScale }] }
+              styles.content,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
             ]}
           >
-            <View style={styles.logoCircle}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
-                style={styles.logoGradient}
-              >
-                {logo ? 
-                  <img src={logo} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Logo" /> 
-                  : <Shield size={64} color="#fff" strokeWidth={2} />
-                }
-              </LinearGradient>
-            </View>
-            <Text style={styles.logoTitle}>
-              {language === 'fa' ? 'سامانه رصد و پایش' : 'Monitoring System'}
-            </Text>
-            <Text style={styles.logoSubtitle}>
-              {language === 'fa' ? 'Threat Monitoring System' : 'Version 1.1'}
-            </Text>
-          </Animated.View>
-
-          {/* Form Card */}
-          <Animated.View 
-            style={[
-              styles.formCard,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-            ]}
-          >
-            <View style={[styles.glassOverlay, isDarkMode && styles.glassOverlayDark]} />
-
-            <View style={styles.formContent}>
-              <View style={styles.formHeader}>
-                <Text style={[styles.formTitle, isDarkMode && styles.textDark, isRTL && styles.rtlText]}>
-                  {t.login || 'ورود به سامانه'}
-                </Text>
-                <Text style={[styles.formSubtitle, isDarkMode && styles.subtitleDark, isRTL && styles.rtlText]}>
-                  {language === 'fa' ? 'برای ادامه وارد شوید' : 'Sign in to continue'}
-                </Text>
+            {/* Header Section */}
+            <View style={styles.header}>
+              <View style={styles.logoContainer}>
+                <LinearGradient
+                  colors={['#4A90E2', '#357ABD']}
+                  style={styles.logoGradient}
+                >
+                  {logo ? 
+                    <Image source={logo} style={{ width: 48, height: 48, objectFit: 'contain' }} alt="Logo" /> 
+                    : <Shield size={48} color="#fff" strokeWidth={2.5} />
+                  }
+                </LinearGradient>
               </View>
 
+              <Text style={[styles.title, isDarkMode && styles.titleDark]}>
+                {language === 'fa' ? 'ورود به سامانه' : 'System Login'}
+              </Text>
+              <Text style={[styles.subtitle, isDarkMode && styles.subtitleDark]}>
+                {language === 'fa' 
+                  ? 'برای دسترسی به سامانه، اطلاعات خود را وارد کنید'
+                  : 'Enter your credentials to access the system'}
+              </Text>
+            </View>
+
+            {/* Form Card */}
+            <View style={[styles.formCard, isDarkMode && styles.formCardDark]}>
               {/* Username Input */}
               <CustomInput
                 label={t.username || 'نام کاربری'}
                 value={username}
-                onChangeText={setUsername}
+                onChangeText={(text) => {
+                  setUsername(text);
+                  if (errors.username) {
+                    setErrors({...errors, username: null});
+                  }
+                }}
                 error={errors.username}
                 icon={User}
-                animValue={inputAnims[0]}
                 isDarkMode={isDarkMode}
                 isRTL={isRTL}
               />
@@ -318,11 +277,15 @@ export default function LoginScreen() {
               <CustomInput
                 label={t.mobile || 'شماره موبایل'}
                 value={mobile}
-                onChangeText={setMobile}
+                onChangeText={(text) => {
+                  setMobile(text);
+                  if (errors.mobile) {
+                    setErrors({...errors, mobile: null});
+                  }
+                }}
                 error={errors.mobile}
                 icon={Phone}
                 keyboardType="phone-pad"
-                animValue={inputAnims[1]}
                 isDarkMode={isDarkMode}
                 isRTL={isRTL}
               />
@@ -331,65 +294,77 @@ export default function LoginScreen() {
               <TouchableOpacity
                 style={[styles.rememberContainer, isRTL && styles.rtlRow]} 
                 onPress={() => setRememberMe(!rememberMe)}
+                activeOpacity={0.7}
               >
                 {rememberMe ? (
-                  <CheckSquare size={22} color="#667eea" strokeWidth={2.5} />
+                  <CheckSquare size={20} color="#4A90E2" strokeWidth={2.5} />
                 ) : (
-                  <Square size={22} color={isDarkMode ? '#666' : '#999'} strokeWidth={2} />
+                  <Square size={20} color="#6c757d" strokeWidth={2} />
                 )}
-                <Text style={[styles.rememberText, isDarkMode && styles.textDark, isRTL && styles.rtlText, isRTL && styles.rtlMargin]}>
+                <Text style={[
+                  styles.rememberText, 
+                  isDarkMode && styles.rememberTextDark,
+                  isRTL && styles.rtlText
+                ]}>
                   {t.rememberMe || 'مرا به خاطر بسپار'}
                 </Text>
               </TouchableOpacity>
 
               {/* Login Button */}
               <TouchableOpacity
-                style={styles.loginButton}
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
                 onPress={handleLogin}
                 disabled={loading}
                 activeOpacity={0.8}
               >
                 <LinearGradient
-                  colors={['#667eea', '#764ba2']}
+                  colors={loading ? ['#adb5bd', '#adb5bd'] : ['#4A90E2', '#357ABD']}
                   start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.loginGradient, isRTL && styles.rtlRow]}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.loginGradient}
                 >
                   {loading ? (
-                    <Text style={[styles.loginButtonText, isRTL && styles.rtlText]}>
+                    <Text style={styles.loginButtonText}>
                       {language === 'fa' ? 'در حال ارسال...' : 'Sending...'}
                     </Text>
                   ) : (
                     <>
-                      <Text style={[styles.loginButtonText, isRTL && styles.rtlText]}>
-                        {language === 'fa' ? 'دریافت کد' : 'Get Code'}
+                      <Text style={styles.loginButtonText}>
+                        {language === 'fa' ? 'دریافت کد تایید' : 'Get Verification Code'}
                       </Text>
-                      <LogIn size={20} color="#fff" style={isRTL && styles.rtlMargin} /> 
+                      <ArrowRight size={18} color="#fff" />
                     </>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* Demo Info */}
-              <View style={[styles.demoCard, isDarkMode && styles.demoCardDark]}>
-                <View style={[styles.demoHeader, isRTL && styles.rtlRow]}>
-                  <View style={[styles.demoBadge, isRTL && styles.rtlMargin]}>
-                    <Text style={styles.demoBadgeText}>DEMO</Text>
-                  </View>
-                  <Text style={[styles.demoTitle, isDarkMode && styles.textDark, isRTL && styles.rtlText]}>
-                    {language === 'fa' ? 'اطلاعات آزمایشی' : 'Demo Credentials'}
-                  </Text>
-                </View>
-                <View style={[styles.demoRow, isRTL && styles.rtlRow]}>
-                  <Text style={[styles.demoLabel, isDarkMode && styles.demoLabelDark, isRTL && styles.rtlText]}>
+              {/* Forgot Link */}
+              <TouchableOpacity style={styles.forgotButton}>
+                <Text style={[styles.forgotText, isRTL && styles.rtlText]}>
+                  {language === 'fa' ? 'مشکل در ورود دارید؟' : 'Having trouble logging in?'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Demo Info Card */}
+            {/* <View style={[styles.demoCard, isDarkMode && styles.demoCardDark]}>
+              <View style={styles.demoHeader}>
+                <Info size={16} color="#4A90E2" />
+                <Text style={[styles.demoTitle, isDarkMode && styles.demoTitleDark]}>
+                  {language === 'fa' ? 'اطلاعات آزمایشی' : 'Demo Account'}
+                </Text>
+              </View>
+              <View style={styles.demoContent}>
+                <View style={styles.demoRow}>
+                  <Text style={[styles.demoLabel, isDarkMode && styles.demoLabelDark]}>
                     {language === 'fa' ? 'نام کاربری:' : 'Username:'}
                   </Text>
                   <Text style={[styles.demoValue, isDarkMode && styles.demoValueDark]}>
                     demo
                   </Text>
                 </View>
-                <View style={[styles.demoRow, isRTL && styles.rtlRow]}>
-                  <Text style={[styles.demoLabel, isDarkMode && styles.demoLabelDark, isRTL && styles.rtlText]}>
+                <View style={styles.demoRow}>
+                  <Text style={[styles.demoLabel, isDarkMode && styles.demoLabelDark]}>
                     {language === 'fa' ? 'موبایل:' : 'Mobile:'}
                   </Text>
                   <Text style={[styles.demoValue, isDarkMode && styles.demoValueDark]}>
@@ -397,22 +372,13 @@ export default function LoginScreen() {
                   </Text>
                 </View>
               </View>
+            </View> */}
 
-              {/* Forgot Password */}
-              <TouchableOpacity style={styles.forgotButton}>
-                <Text style={[styles.forgotText, isRTL && styles.rtlText]}>
-                  {language === 'fa' ? 'مشکل در ورود؟' : 'Trouble logging in?'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-
-          {/* Footer */}
-          <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
-            <Text style={[styles.footerText, isRTL && styles.rtlText]}>
+            {/* Footer */}
+            <Text style={[styles.footer, isDarkMode && styles.footerDark]}>
               {language === 'fa' 
-                ? `نسخه ${version} • توسعه یافته توسط فهام`
-                : `Version ${version} • Developed by Faham`}
+                ? `نسخه ${version?.version || '1.1'} • شرکت فهام`
+                : `Version ${version?.version || '1.1'} • Faham Company`}
             </Text>
           </Animated.View>
         </ScrollView>
@@ -422,60 +388,284 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#667eea' },
-  containerDark: { backgroundColor: '#0a0a0a' },
-  backgroundGradient: { position: 'absolute', left: 0, right: 0, top: 0, height: '100%' },
-  decorativeCircle1: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(255, 255, 255, 0.1)', top: -100, right: -100 },
-  decorativeCircle2: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255, 255, 255, 0.08)', bottom: -50, left: -50 },
-  keyboardView: { flex: 1 },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20, minHeight: height * 0.9 },
-  logoContainer: { alignItems: 'center', marginBottom: 40, marginTop: 60 },
-  logoCircle: { width: 120, height: 120, borderRadius: 60, overflow: 'hidden', marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 },
-  logoGradient: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
-  logoTitle: { fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 8, textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
-  logoSubtitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.85)', fontWeight: '500' },
-  formCard: { borderRadius: 32, overflow: 'hidden', marginBottom: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 12 },
-  glassOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 255, 255, 0.95)' },
-  glassOverlayDark: { backgroundColor: 'rgba(26, 26, 26, 0.95)' },
-  formContent: { padding: 28, position: 'relative', zIndex: 1 },
-  formHeader: { alignItems: 'center', marginBottom: 32 },
-  formTitle: { fontSize: 26, fontWeight: '700', color: '#333', marginBottom: 8 },
-  formSubtitle: { fontSize: 14, color: '#666', fontWeight: '500' },
-  subtitleDark: { color: '#999' },
-  textDark: { color: '#e0e0e0' },
-  inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8, marginRight: 4 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 16, borderWidth: 2, borderColor: 'transparent', paddingHorizontal: 16, height: 56 },
-  inputWrapperDark: { backgroundColor: '#2a2a2a' },
-  inputWrapperError: { borderColor: '#DC3545' },
-  iconContainerLTR: { marginLeft: 12, marginRight: 8 },
-  iconContainerRTL: { marginRight: 12, marginLeft: 8 },
-  input: { flex: 1, fontSize: 16, color: '#333', paddingVertical: 0, textAlign: 'left', ...(Platform.OS === 'web' && { outlineStyle: 'none' }) },
-  inputDark: { color: '#e0e0e0' },
-  eyeButton: { padding: 8 },
-  errorText: { color: '#DC3545', fontSize: 12, marginTop: 6, marginRight: 4 },
-  rememberContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  rememberText: { fontSize: 14, color: '#333', fontWeight: '500', marginRight: 8, textAlign: 'left' },
-  loginButton: { borderRadius: 16, overflow: 'hidden', marginBottom: 20, shadowColor: '#667eea', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
-  loginGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 8 },
-  loginButtonText: { fontSize: 18, fontWeight: '700', color: '#fff', marginLeft: 8, textAlign: 'left' },
-  demoCard: { backgroundColor: '#f8f9fa', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#e9ecef' },
-  demoCardDark: { backgroundColor: '#2a2a2a', borderColor: '#3a3a3a' },
-  demoHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  demoBadge: { backgroundColor: '#667eea', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginLeft: 8 },
-  demoBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  demoTitle: { fontSize: 14, fontWeight: '600', color: '#333', textAlign: 'left' },
-  demoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  demoLabel: { fontSize: 13, color: '#666', fontWeight: '500', textAlign: 'left' },
-  demoLabelDark: { color: '#999' },
-  demoValue: { fontSize: 13, color: '#333', fontWeight: '600', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
-  demoValueDark: { color: '#e0e0e0', backgroundColor: '#1a1a1a' },
-  forgotButton: { alignItems: 'center', paddingVertical: 8 },
-  forgotText: { fontSize: 14, color: '#667eea', fontWeight: '600', textAlign: 'center' },
-  footer: { alignItems: 'center', paddingVertical: 20 },
-  footerText: { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500', textAlign: 'center' },
-  rtlText: { textAlign: 'right', writingDirection: 'rtl' },
-  rtlInputWrapper: { flexDirection: 'row-reverse' },
-  rtlTextInput: { textAlign: 'right', writingDirection: 'rtl' },
-  rtlRow: { flexDirection: 'row-reverse' },
-  rtlMargin: { marginRight: 0, marginLeft: 8 }
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  containerDark: {
+    backgroundColor: '#1a1d29',
+  },
+  backgroundGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: '100%',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+    minHeight: height * 0.9,
+  },
+  content: {
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
+  },
+
+  // Header
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logoContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  logoGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#212529',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  titleDark: {
+    color: '#e9ecef',
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#6c757d',
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  subtitleDark: {
+    color: '#adb5bd',
+  },
+
+  // Form Card
+  formCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 20,
+  },
+  formCardDark: {
+    backgroundColor: '#212529',
+  },
+
+  // Input Section
+  inputSection: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: 8,
+  },
+  inputLabelDark: {
+    color: '#adb5bd',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e9ecef',
+  },
+  inputWrapperDark: {
+    backgroundColor: '#2d3139',
+    borderColor: '#3a3f47',
+  },
+  inputWrapperError: {
+    borderColor: '#dc3545',
+    backgroundColor: '#fff5f5',
+  },
+  iconContainer: {
+    paddingLeft: 14,
+    paddingRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: '#212529',
+    paddingVertical: 14,
+    paddingRight: 14,
+    ...(Platform.OS === 'web' && { outlineStyle: 'none' }),
+  },
+  inputDark: {
+    color: '#e9ecef',
+  },
+  rtlTextInput: {
+    textAlign: 'right',
+  },
+  eyeButton: {
+    padding: 14,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#dc3545',
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
+
+  // Remember Me
+  rememberContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 2,
+  },
+  rememberText: {
+    fontSize: 14,
+    color: '#495057',
+    fontWeight: '500',
+    marginLeft: 10,
+  },
+  rememberTextDark: {
+    color: '#adb5bd',
+  },
+
+  // Login Button
+  loginButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
+  loginGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+
+  // Forgot Button
+  forgotButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  forgotText: {
+    fontSize: 14,
+    color: '#4A90E2',
+    fontWeight: '600',
+  },
+
+  // Demo Card
+  demoCard: {
+    backgroundColor: '#f0f7ff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#d0e7ff',
+  },
+  demoCardDark: {
+    backgroundColor: '#1e2a3a',
+    borderColor: '#2d3e50',
+  },
+  demoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#d0e7ff',
+  },
+  demoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4A90E2',
+  },
+  demoTitleDark: {
+    color: '#6ca8e8',
+  },
+  demoContent: {
+    gap: 8,
+  },
+  demoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  demoLabel: {
+    fontSize: 13,
+    color: '#6c757d',
+    fontWeight: '500',
+  },
+  demoLabelDark: {
+    color: '#adb5bd',
+  },
+  demoValue: {
+    fontSize: 13,
+    color: '#212529',
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  demoValueDark: {
+    color: '#e9ecef',
+    backgroundColor: '#2d3139',
+  },
+
+  // Footer
+  footer: {
+    fontSize: 12,
+    color: '#adb5bd',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  footerDark: {
+    color: '#6c757d',
+  },
+
+  // RTL Support
+  rtlText: {
+    textAlign: 'right',
+  },
+  rtlRow: {
+    flexDirection: 'row-reverse',
+  },
 });

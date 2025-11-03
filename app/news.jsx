@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,81 +6,299 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Modal
+  Modal,
+  Animated,
+  LayoutAnimation,
+  Platform
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Calendar, Bell, AlertTriangle, Shield, X, ChevronRight } from 'lucide-react-native';
 import { useStore } from '../store/useStore';
 import { translations } from '../constants/translations';
-import { mockNews } from '../constants/mockData';
 import Header from '../components/Header';
-import { Calendar, CircleAlert as AlertCircle, X, ChevronRight } from 'lucide-react-native';
+import { api } from '../hooks/api';
+import { useRouter } from 'expo-router';
 
 export default function NewsScreen() {
-  const { language, isDarkMode } = useStore();
+  const { language, isDarkMode, user } = useStore();
   const t = translations[language];
   const isRTL = language === 'fa';
+  const router = useRouter();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedNews, setSelectedNews] = useState(null);
+  const [forms, setForms] = useState([]);
+  const [selectedItem, setSelectedItem] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  };
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(25)).current;
 
-  const getCategoryColor = (category) => {
-    switch (category) {
-      case 'گزارش رسمی':
-      case 'Official Report':
-        return '#007BFF';
-      case 'هشدار':
-      case 'Alert':
-        return '#DC3545';
-      case 'پیشگیری':
-      case 'Prevention':
-        return '#28A745';
-      default:
-        return '#6c757d';
+  useEffect(() => {
+    fetchForms();
+  }, []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 10,
+        tension: 45,
+        useNativeDriver: true
+      })
+    ]).start();
+  }, [forms]);
+
+  const fetchForms = async () => {
+    try {
+      const finger = user?.finger || '';
+      const now = Date.now();
+      const response = await api.news(finger, now);
+
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setForms(
+        (response || []).map(item => ({
+          ...item,
+          readableDate: formatUnixTime(item.time),
+          plainBody: stripHtml(item.body),
+        }))
+      );
+    } catch (error) {
+      console.log('Error fetching forms', error);
     }
   };
 
-  const renderNewsItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.newsCard, isDarkMode && styles.newsCardDark]}
-      onPress={() => {
-        setSelectedNews(item);
-        setModalVisible(true);
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}>
-        <AlertCircle size={14} color="#ffffff" />
-        <Text style={styles.categoryText}>{item.category}</Text>
-      </View>
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchForms();
+    setRefreshing(false);
+  };
 
-      <Text style={[styles.newsTitle, isDarkMode && styles.textDark, isRTL && styles.rtl]}>
-        {item.title}
-      </Text>
+  const stripHtml = (html) =>
+    html ? html.replace(/<\/?[^>]+(>|$)/g, '').trim() : '';
 
-      <Text style={[styles.newsExcerpt, isDarkMode && styles.newsExcerptDark, isRTL && styles.rtl]}>
-        {item.excerpt}
-      </Text>
+  const formatUnixTime = (unix) => {
+    if (!unix) return '';
+    const date = new Date(parseInt(unix, 10) * 1000);
+    return date.toLocaleDateString(isRTL ? 'fa-IR' : 'en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
-      <View style={styles.newsFooter}>
-        <View style={styles.newsInfo}>
-          <Calendar size={14} color={isDarkMode ? '#999' : '#666'} />
-          <Text style={[styles.newsDate, isDarkMode && styles.newsDateDark]}>
-            {item.date}
-          </Text>
-          <Text style={[styles.newsSource, isDarkMode && styles.newsSourceDark]}>
-            • {item.source}
-          </Text>
-        </View>
-        <ChevronRight size={20} color="#007BFF" />
-      </View>
-    </TouchableOpacity>
+  const categoryMeta = (type) => {
+    const trimmed = type?.trim();
+    if (!trimmed) {
+      return {
+        label: language === 'fa' ? 'پیام عمومی' : 'General message',
+        icon: Bell,
+        gradient: isDarkMode
+          ? ['#1f2a3a', '#192330']
+          : ['#eef4ff', '#dbe5ff'],
+        textColor: isDarkMode ? '#e9f0ff' : '#1f2a3a',
+        badgeColor: isDarkMode ? '#3b4a63' : '#cfd9ec',
+      };
+    }
+
+    const mapping = [
+      {
+        match: ['سلامت', 'health'],
+        icon: Shield,
+        gradient: isDarkMode
+          ? ['#1f2a3a', '#1a2332']
+          : ['#eef4ff', '#e1eeff'],
+        textColor: isDarkMode ? '#d7e3ff' : '#1f2a3a',
+        badgeColor: '#4A90E2'
+      },
+      {
+        match: ['هشدار', 'alert'],
+        icon: AlertTriangle,
+        gradient: isDarkMode
+          ? ['#331f23', '#29171a']
+          : ['#ffe3e0', '#ffd1d2'],
+        textColor: isDarkMode ? '#ffc5c8' : '#7d2633',
+        badgeColor: '#DC3545'
+      },
+    ];
+
+    const hit =
+      mapping.find(entry =>
+        entry.match.some(keyword =>
+          trimmed.toLowerCase().includes(keyword.toLowerCase())
+        )
+      ) ||
+      {
+        icon: Shield,
+        gradient: isDarkMode
+          ? ['#222734', '#1b1f29']
+          : ['#f1f4f9', '#e6eaef'],
+        textColor: isDarkMode ? '#d7e3ff' : '#1f2a3a',
+        badgeColor: isDarkMode ? '#3b4a63' : '#cfd9ec',
+      };
+
+    return {
+      label: trimmed,
+      ...hit
+    };
+  };
+
+  const renderItem = ({ item, index }) => {
+    const meta = categoryMeta(item.type);
+    const enabled = item.type?.trim();
+
+    return (
+      <Animated.View
+        style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            if (enabled) {
+              router.push({
+                pathname: '/public-health',
+                params: {
+                  id: item.idn,
+                  title: item.title,
+                  type: item.type,
+                  time: item.readableDate,
+                  body: item.body,
+                  plain: item.plainBody
+                }
+              });
+              return;
+            }
+
+            setSelectedItem(item);
+            setModalVisible(true);
+          }}
+        >
+          <LinearGradient
+            colors={meta.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              styles.newsCard,
+              isDarkMode && styles.newsCardDark,
+            ]}
+          >
+            <View style={[
+              styles.categoryBadge,
+              { backgroundColor: meta.badgeColor }
+            ]}>
+              <meta.icon size={16} color="#fff" />
+              <Text style={styles.categoryText}>
+                {meta.label}
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                styles.newsTitle,
+                { color: meta.textColor },
+                isRTL && styles.rtlText
+              ]}
+            >
+              {item.title}
+            </Text>
+
+            {item.plainBody ? (
+              <Text
+                style={[
+                  styles.newsExcerpt,
+                  isDarkMode && styles.newsExcerptDark,
+                  isRTL && styles.rtlText
+                ]}
+                numberOfLines={3}
+              >
+                {item.plainBody}
+              </Text>
+            ) : (
+              <Text
+                style={[
+                  styles.newsExcerptMuted,
+                  isDarkMode && styles.newsExcerptMutedDark,
+                  isRTL && styles.rtlText
+                ]}
+              >
+                {language === 'fa'
+                  ? 'بدون توضیحات تکمیلی'
+                  : 'No additional description'}
+              </Text>
+            )}
+
+            <View style={styles.footer}>
+              <View style={styles.footerLeft}>
+                <Calendar size={14} color={isDarkMode ? '#adb5bd' : '#6c757d'} />
+                <Text
+                  style={[
+                    styles.newsDate,
+                    isDarkMode && styles.newsDateDark
+                  ]}
+                >
+                  {item.readableDate}
+                </Text>
+              </View>
+
+              {enabled ? (
+                <View style={styles.cta}>
+                  <Text style={styles.ctaText}>
+                    {language === 'fa' ? 'نمایش کامل' : 'View details'}
+                  </Text>
+                  <ChevronRight size={18} color="#4A90E2" />
+                </View>
+              ) : (
+                <Text
+                  style={[
+                    styles.infoTag,
+                    isDarkMode && styles.infoTagDark
+                  ]}
+                >
+                  {language === 'fa'
+                    ? 'در همین صفحه قابل مشاهده است'
+                    : 'Displayed inline'}
+                </Text>
+              )}
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+  const EmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <LinearGradient
+        colors={isDarkMode ? ['#1a1d29', '#11151d'] : ['#f0f4f9', '#e8edf4']}
+        style={styles.emptyCard}
+      >
+        <Bell size={32} color={isDarkMode ? '#d7e3ff' : '#4A90E2'} />
+        <Text style={[
+          styles.emptyTitle,
+          isDarkMode && styles.textDark
+        ]}>
+          {language === 'fa'
+            ? 'پیامی برای نمایش وجود ندارد'
+            : 'No announcements yet'}
+        </Text>
+        <Text style={[
+          styles.emptySubtitle,
+          isDarkMode && styles.emptySubtitleDark,
+          isRTL && styles.rtlText
+        ]}>
+          {language === 'fa'
+            ? 'به‌محض ارسال پیام جدید، در همین صفحه نمایش داده می‌شود.'
+            : 'As soon as new messages arrive, they will appear here.'}
+        </Text>
+      </LinearGradient>
+    </View>
   );
 
   return (
@@ -88,16 +306,17 @@ export default function NewsScreen() {
       <Header />
 
       <FlatList
-        data={mockNews}
-        renderItem={renderNewsItem}
-        keyExtractor={item => item.id}
+        data={forms}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.idn}
+        ListEmptyComponent={<EmptyState />}
         contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#007BFF"
-            colors={['#007BFF']}
+            tintColor="#4A90E2"
+            colors={['#4A90E2']}
           />
         }
       />
@@ -105,46 +324,66 @@ export default function NewsScreen() {
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent={true}
+        transparent
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isDarkMode && styles.modalContentDark]}>
+          <View style={[
+            styles.modalContent,
+            isDarkMode && styles.modalContentDark
+          ]}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
                 <View style={[
-                  styles.categoryBadge,
-                  { backgroundColor: getCategoryColor(selectedNews?.category), marginBottom: 12 }
+                  styles.modalBadge,
+                  { backgroundColor: '#4A90E2' }
                 ]}>
-                  <AlertCircle size={14} color="#ffffff" />
-                  <Text style={styles.categoryText}>{selectedNews?.category}</Text>
+                  <Bell size={16} color="#fff" />
+                  <Text style={styles.modalBadgeText}>
+                    {language === 'fa' ? 'پیام عمومی' : 'General message'}
+                  </Text>
                 </View>
-                <Text style={[styles.modalTitle, isDarkMode && styles.textDark, isRTL && styles.rtl]}>
-                  {selectedNews?.title}
+                <Text
+                  style={[
+                    styles.modalTitle,
+                    isDarkMode && styles.textDark,
+                    isRTL && styles.rtlText
+                  ]}
+                >
+                  {selectedItem?.title}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={{ marginLeft: 12 }}>
-                <X size={24} color={isDarkMode ? '#e0e0e0' : '#333'} />
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <X size={20} color={isDarkMode ? '#e3e9f6' : '#1f2a3a'} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalMeta}>
-              <Calendar size={14} color={isDarkMode ? '#999' : '#666'} />
-              <Text style={[styles.modalDate, isDarkMode && styles.textDark]}>
-                {selectedNews?.date}
-              </Text>
-              <Text style={[styles.modalSource, isDarkMode && styles.textDark]}>
-                • {selectedNews?.source}
+              <Calendar size={14} color={isDarkMode ? '#adb5bd' : '#6c757d'} />
+              <Text
+                style={[
+                  styles.modalDate,
+                  isDarkMode && styles.textDark
+                ]}
+              >
+                {selectedItem?.readableDate}
               </Text>
             </View>
 
-            <Text style={[styles.modalText, isDarkMode && styles.textDark, isRTL && styles.rtl]}>
-              {selectedNews?.excerpt}
-            </Text>
-            <Text style={[styles.modalText, isDarkMode && styles.textDark, isRTL && styles.rtl]}>
-              {language === 'fa'
-                ? 'در این گزارش جامع، تمامی جوانب موضوع بررسی شده و توصیه‌های لازم برای پیشگیری و مدیریت تهدیدات زیستی ارائه شده است. همچنین اقدامات پیشنهادی برای افزایش آمادگی سازمان‌ها و افراد در مواجهه با این تهدیدات مورد بحث قرار گرفته است.'
-                : 'This comprehensive report examines all aspects of the issue and provides necessary recommendations for preventing and managing biological threats. Additionally, suggested measures for increasing preparedness of organizations and individuals in facing these threats have been discussed.'}
+            <Text
+              style={[
+                styles.modalText,
+                isDarkMode && styles.textDark,
+                isRTL && styles.rtlText
+              ]}
+            >
+              {selectedItem?.plainBody ||
+                (language === 'fa'
+                  ? 'بدون توضیحات تکمیلی.'
+                  : 'No further description provided.')}
             </Text>
           </View>
         </View>
@@ -154,139 +393,187 @@ export default function NewsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  containerDark: {
-    backgroundColor: '#121212',
-  },
-  listContainer: {
-    padding: 16,
-  },
+  container: { flex: 1, backgroundColor: '#eef2f7' },
+  containerDark: { backgroundColor: '#151822' },
+  listContainer: { padding: 16, gap: 14 },
   newsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 18,
+    padding: 18,
+    shadowColor: '#0c1b33',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 4,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   newsCardDark: {
-    backgroundColor: '#2a2a2a',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
   },
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 12,
-    marginBottom: 12,
-    gap: 4,
+    marginBottom: 14,
+    gap: 6,
   },
   categoryText: {
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 0.4,
   },
   newsTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginBottom: 10,
   },
   newsExcerpt: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
+    fontSize: 13,
+    color: '#3f506d',
     lineHeight: 20,
+    marginBottom: 14,
   },
-  newsExcerptDark: {
-    color: '#999',
+  newsExcerptDark: { color: '#c7d1eb' },
+  newsExcerptMuted: {
+    fontSize: 13,
+    color: '#8c9ab4',
+    marginBottom: 14,
+    fontStyle: 'italic',
   },
-  newsFooter: {
+  newsExcerptMutedDark: { color: '#95a3c1' },
+  footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  newsInfo: {
+  footerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flex: 1,
   },
   newsDate: {
     fontSize: 12,
-    color: '#666',
+    color: '#6c7a90',
+    fontWeight: '600',
   },
   newsDateDark: {
-    color: '#999',
+    color: '#adb5bd',
   },
-  newsSource: {
+  cta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ctaText: {
     fontSize: 12,
-    color: '#666',
+    fontWeight: '700',
+    color: '#4A90E2',
   },
-  newsSourceDark: {
-    color: '#999',
+  infoTag: {
+    fontSize: 11,
+    color: '#6c7a90',
+    fontWeight: '600',
   },
-  textDark: {
-    color: '#e0e0e0',
-  },
-  rtl: {
-    writingDirection: 'rtl',
-    textAlign: 'right',
-  },
+  infoTagDark: { color: '#9aa6c2' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(10, 15, 25, 0.55)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: '80%',
+    padding: 24,
+    minHeight: '45%',
   },
   modalContentDark: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#1f2735',
   },
-  modalHeader: {
+  modalHeader: { flexDirection: 'row', marginBottom: 16 },
+  modalBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
     marginBottom: 12,
+  },
+  modalBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1f2a3a',
+    lineHeight: 28,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(74,144,226,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 16,
-    paddingBottom: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: 'rgba(74,144,226,0.12)',
+    marginBottom: 16,
   },
   modalDate: {
-    fontSize: 12,
-    color: '#666',
-  },
-  modalSource: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3f506d',
   },
   modalText: {
-    fontSize: 16,
+    fontSize: 15,
     lineHeight: 24,
-    color: '#333',
-    marginBottom: 12,
+    color: '#1f2a3a',
+  },
+  emptyContainer: {
+    paddingVertical: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCard: {
+    width: '85%',
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2a3a',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#53617f',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptySubtitleDark: {
+    color: '#9aa6c2',
+  },
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
 });

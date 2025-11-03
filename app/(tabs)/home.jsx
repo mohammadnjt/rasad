@@ -5,7 +5,8 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Animated, 
-  Dimensions 
+  Dimensions,
+  ImageBackground
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useStore } from '../../store/useStore';
@@ -17,12 +18,14 @@ import {
   Newspaper, 
   Mail, 
   Settings as SettingsIcon, 
-  Circle as HelpCircle 
+  HelpCircle,
+  ArrowRight
 } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { LinearGradient } from 'expo-linear-gradient'; // نصب کنید: expo install expo-linear-gradient
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
+const cardWidth = (width - 48) / 2; // 16 padding + 16 gap
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -30,65 +33,70 @@ export default function HomeScreen() {
   const t = translations[language];
   const isRTL = language === 'fa';
 
-  console.log('user', user)
-
   // انیمیشن‌ها
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnims = useRef([]).current;
+
+  // انیمیشن‌های بک‌گراند دایره‌ها
+  const bgPulseAnims = useRef([
+    new Animated.Value(1),
+    new Animated.Value(1),
+    new Animated.Value(1),
+  ]).current;
 
   const menuItems = [
     {
       id: 'login',
       title: t.login,
-      subtitle: 'ورود به حساب کاربری',
+      subtitle: isRTL ? 'ورود به حساب' : 'Sign in',
       icon: User,
       route: '/login',
-      gradient: ['#667eea', '#764ba2'],
+      color: '#4A90E2',
       show: !isLoggedIn
     },
     {
       id: 'education',
       title: t.education,
-      subtitle: 'آموزش و یادگیری',
+      subtitle: isRTL ? 'آموزش و یادگیری' : 'Learning',
       icon: BookOpen,
       route: '/education',
-      gradient: ['#f093fb', '#f5576c'],
+      color: '#357ABD',
       show: true
     },
     {
       id: 'news',
       title: t.news,
-      subtitle: 'اخبار و اطلاعیه‌ها',
+      subtitle: isRTL ? 'اخبار و اطلاعیه' : 'News',
       icon: Newspaper,
       route: '/news',
-      gradient: ['#4facfe', '#00f2fe'],
+      color: '#2C5F94',
       show: true
     },
     {
       id: 'contact',
       title: t.contactUs,
-      subtitle: 'ارتباط با ما',
+      subtitle: isRTL ? 'ارتباط با ما' : 'Contact',
       icon: Mail,
       route: '/contact',
-      gradient: ['#43e97b', '#38f9d7'],
+      color: '#1F4B6F',
       show: true
     },
     {
       id: 'settings',
       title: t.settings,
-      subtitle: 'تنظیمات برنامه',
+      subtitle: isRTL ? 'تنظیمات برنامه' : 'Settings',
       icon: SettingsIcon,
       route: '/settings',
-      gradient: ['#fa709a', '#fee140'],
+      color: '#4A90E2',
       show: true
     },
     {
       id: 'guide',
       title: t.guide,
-      subtitle: 'راهنمای استفاده',
+      subtitle: isRTL ? 'راهنمای استفاده' : 'Help',
       icon: HelpCircle,
       route: '/guide',
-      gradient: ['#30cfd0', '#330867'],
+      color: '#357ABD',
       show: true
     },
   ];
@@ -113,7 +121,7 @@ export default function HomeScreen() {
       }),
       // انیمیشن stagger برای کارت‌ها
       Animated.stagger(
-        100,
+        80,
         scaleAnims.map(anim =>
           Animated.spring(anim, {
             toValue: 1,
@@ -124,6 +132,24 @@ export default function HomeScreen() {
         )
       ),
     ]).start();
+
+    // انیمیشن pulse برای دایره‌های بک‌گراند
+    bgPulseAnims.forEach((anim, index) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1.2,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    });
   }, []);
 
   const AnimatedMenuItem = ({ item, index }) => {
@@ -131,7 +157,7 @@ export default function HomeScreen() {
 
     const handlePressIn = () => {
       Animated.spring(pressAnim, {
-        toValue: 0.95,
+        toValue: 0.96,
         useNativeDriver: true,
       }).start();
     };
@@ -139,7 +165,7 @@ export default function HomeScreen() {
     const handlePressOut = () => {
       Animated.spring(pressAnim, {
         toValue: 1,
-        friction: 3,
+        friction: 4,
         tension: 40,
         useNativeDriver: true,
       }).start();
@@ -147,76 +173,73 @@ export default function HomeScreen() {
 
     return (
       <Animated.View
-        style={{
-          opacity: fadeAnim,
-          transform: [
-            {
-              scale: scaleAnims[index] || new Animated.Value(1),
-            },
-            {
-              scale: pressAnim,
-            },
-          ],
-        }}
+        style={[
+          styles.cardWrapper,
+          {
+            opacity: fadeAnim,
+            margin: 'auto',
+            transform: [
+              {
+                scale: scaleAnims[index] || new Animated.Value(1),
+              },
+              {
+                scale: pressAnim,
+              },
+            ],
+          }
+        ]}
       >
         <TouchableOpacity
           onPress={() => router.push(item.route)}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           activeOpacity={1}
+          style={styles.touchable}
         >
-          <LinearGradient
-            colors={item.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[
-              styles.menuItem,
-              isDarkMode && styles.menuItemDark,
-            ]}
-          >
-            {/* طبقه شیشه‌ای */}
-            <View style={[
-              styles.glassOverlay,
-              isDarkMode && styles.glassOverlayDark
-            ]} />
+          <View style={[
+            styles.menuCard,
+            isDarkMode && styles.menuCardDark,
+          ]}>
+            {/* دایره‌های دکوراتیو */}
+            <View style={[styles.decorativeCircle1, { backgroundColor: `${item.color}15` }]} />
+            <View style={[styles.decorativeCircle2, { backgroundColor: `${item.color}10` }]} />
             
-            <View style={styles.menuItemContent}>
-              {/* آیکون */}
-              <View style={styles.iconContainer}>
-                <item.icon size={32} color="#ffffff" strokeWidth={2.5} />
-              </View>
-
-              {/* متن */}
-              <View style={styles.textContainer}>
-                <Text style={[
-                  styles.menuItemTitle,
-                  isRTL && styles.rtl
-                ]}>
-                  {item.title}
-                </Text>
-                <Text style={[
-                  styles.menuItemSubtitle,
-                  isRTL && styles.rtl
-                ]}>
-                  {item.subtitle}
-                </Text>
-              </View>
-
-              {/* فلش */}
-              <View style={[
-                styles.arrowContainer,
-                isRTL && styles.arrowContainerRTL
-              ]}>
-                <Text style={styles.arrow}>
-                  {isRTL ? '←' : '→'}
-                </Text>
-              </View>
+            {/* آیکون */}
+            <View style={[styles.iconContainer, { backgroundColor: `${item.color}20` }]}>
+              <item.icon size={28} color={item.color} strokeWidth={2.5} />
             </View>
 
-            {/* دایره دکوراتیو */}
-            <View style={styles.decorativeCircle1} />
-            <View style={styles.decorativeCircle2} />
-          </LinearGradient>
+            {/* متن */}
+            <View style={styles.textContainer}>
+              <Text style={[
+                styles.menuItemTitle,
+                isDarkMode && styles.menuItemTitleDark,
+                isRTL && styles.rtl
+              ]}>
+                {item.title}
+              </Text>
+              <Text style={[
+                styles.menuItemSubtitle,
+                isDarkMode && styles.menuItemSubtitleDark,
+                isRTL && styles.rtl
+              ]}>
+                {item.subtitle}
+              </Text>
+            </View>
+
+            {/* فلش */}
+            <View style={[
+              styles.arrowContainer,
+              { backgroundColor: `${item.color}15` }
+            ]}>
+              <ArrowRight 
+                size={16} 
+                color={item.color} 
+                strokeWidth={2.5}
+                style={isRTL && { transform: [{ rotate: '180deg' }] }}
+              />
+            </View>
+          </View>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -226,15 +249,55 @@ export default function HomeScreen() {
     <View style={[styles.container, isDarkMode && styles.containerDark]}>
       <Header />
       
-      {/* Background Gradient */}
-      <LinearGradient
-        colors={
-          isDarkMode 
-            ? ['#1a1a2e', '#16213e', '#0f3460']
-            : ['#667eea', '#764ba2', '#f093fb']
-        }
-        style={styles.backgroundGradient}
-      />
+      {/* Background Pattern */}
+      <View style={styles.backgroundContainer}>
+        <LinearGradient
+          colors={
+            isDarkMode 
+              ? ['#1a1d29', '#212529', '#2d3139']
+              : ['#f8f9fa', '#e9ecef', '#dee2e6']
+          }
+          style={styles.backgroundGradient}
+        />
+        {/* Dots Pattern */}
+        <View style={styles.dotsPattern}>
+          {[...Array(50)].map((_, i) => (
+            <View 
+              key={i} 
+              style={[
+                styles.dot,
+                isDarkMode ? styles.dotDark : styles.dotLight,
+                {
+                  left: `${(i % 10) * 10}%`,
+                  top: `${Math.floor(i / 10) * 20}%`,
+                }
+              ]} 
+            />
+          ))}
+        </View>
+        {/* دایره‌های دکوراتیو متحرک در بک‌گراند */}
+        <Animated.View 
+          style={[
+            styles.bgDecorativeCircle1, 
+            isDarkMode ? styles.bgDecorativeCircleDark : styles.bgDecorativeCircleLight,
+            { transform: [{ scale: bgPulseAnims[0] }] }
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.bgDecorativeCircle2, 
+            isDarkMode ? styles.bgDecorativeCircleDark : styles.bgDecorativeCircleLight,
+            { transform: [{ scale: bgPulseAnims[1] }] }
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.bgDecorativeCircle3, 
+            isDarkMode ? styles.bgDecorativeCircleDark : styles.bgDecorativeCircleLight,
+            { transform: [{ scale: bgPulseAnims[2] }] }
+          ]} 
+        />
+      </View>
 
       <ScrollView 
         style={styles.content}
@@ -246,20 +309,31 @@ export default function HomeScreen() {
           <View style={styles.welcomeContainer}>
             <Text style={[
               styles.welcomeTitle,
+              isDarkMode && styles.welcomeTitleDark,
               isRTL && styles.rtl
             ]}>
               {isRTL ? '👋 خوش آمدید' : 'Welcome 👋'}
             </Text>
+            {user?.name && (
+              <Text style={[
+                styles.welcomeName,
+                isDarkMode && styles.welcomeNameDark,
+                isRTL && styles.rtl
+              ]}>
+                {user.name}
+              </Text>
+            )}
             <Text style={[
               styles.welcomeSubtitle,
+              isDarkMode && styles.welcomeSubtitleDark,
               isRTL && styles.rtl
             ]}>
-              {isRTL ? 'رصد و پایش تهدیدات زیست' : 'Threat Monitoring System'}
+              {isRTL ? 'سامانه رصد و پایش' : 'Monitoring System'}
             </Text>
           </View>
         </Animated.View>
 
-        {/* Menu Grid */}
+        {/* Menu Grid - دو ستونی */}
         <View style={styles.menuGrid}>
           {visibleItems.map((item, index) => (
             <AnimatedMenuItem key={item.id} item={item} index={index} />
@@ -276,146 +350,214 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   containerDark: {
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#1a1d29',
+  },
+  
+  // Background
+  backgroundContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: -1,
   },
   backgroundGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  dotsPattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.4,
+  },
+  dot: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: '100%',
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+  },
+  dotLight: {
+    backgroundColor: '#4A90E2',
+    opacity: 0.15,
+  },
+  dotDark: {
+    backgroundColor: '#6ca8e8',
     opacity: 0.1,
   },
+
+  // دایره‌های دکوراتیو متحرک در بک‌گراند
+  bgDecorativeCircle1: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    top: '10%',
+    left: '-10%',
+    opacity: 0.08,
+  },
+  bgDecorativeCircle2: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    bottom: '20%',
+    right: '-15%',
+    opacity: 0.06,
+  },
+  bgDecorativeCircle3: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    top: '50%',
+    left: '40%',
+    opacity: 0.07,
+  },
+  bgDecorativeCircleLight: {
+    backgroundColor: '#4A90E2',
+  },
+  bgDecorativeCircleDark: {
+    backgroundColor: '#6ca8e8',
+  },
+
+  // Content
   content: {
     flex: 1,
   },
   scrollContent: {
     paddingBottom: 20,
   },
+
+  // Welcome Section
   welcomeContainer: {
     padding: 24,
-    paddingTop: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   welcomeTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    color: '#212529',
+    marginBottom: 4,
+  },
+  welcomeTitleDark: {
+    color: '#e9ecef',
+  },
+  welcomeName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#4A90E2',
+    marginBottom: 6,
+  },
+  welcomeNameDark: {
+    color: '#6ca8e8',
   },
   welcomeSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 15,
+    color: '#6c757d',
     fontWeight: '500',
   },
+  welcomeSubtitleDark: {
+    color: '#adb5bd',
+  },
+
+  // Menu Grid - دو ستونی
   menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 16,
-    marginBottom: 50,
     gap: 16,
   },
-  menuItem: {
-    borderRadius: 24,
-    marginBottom: 16,
+  cardWrapper: {
+    width: cardWidth,
+  },
+  touchable: {
+    width: '100%',
+  },
+  menuCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    minHeight: 160,
+    position: 'relative',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 3,
   },
-  menuItemDark: {
-    shadowColor: '#000',
-    shadowOpacity: 0.6,
-  },
-  glassOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    backdropFilter: 'blur(10px)',
-  },
-  glassOverlayDark: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  menuItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    position: 'relative',
-    zIndex: 1,
-  },
-  iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+  menuCardDark: {
+    backgroundColor: '#212529',
     shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  textContainer: {
-    flex: 1,
-    marginLeft: 16,
-    marginRight: 16,
-  },
-  menuItemTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  menuItemSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '500',
-  },
-  arrowContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  arrowContainerRTL: {
-    transform: [{ rotate: '180deg' }],
-  },
-  arrow: {
-    fontSize: 20,
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  rtl: {
-    writingDirection: 'rtl',
-    textAlign: 'right',
-  },
+
   // دایره‌های دکوراتیو
   decorativeCircle1: {
     position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     top: -20,
     right: -20,
   },
   decorativeCircle2: {
     position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     bottom: -10,
-    left: 20,
+    left: -10,
+  },
+
+  // Icon Container
+  iconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    zIndex: 1,
+  },
+
+  // Text Container
+  textContainer: {
+    flex: 1,
+    zIndex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#212529',
+    marginBottom: 4,
+  },
+  menuItemTitleDark: {
+    color: '#e9ecef',
+  },
+  menuItemSubtitle: {
+    fontSize: 12,
+    color: '#6c757d',
+    fontWeight: '500',
+  },
+  menuItemSubtitleDark: {
+    color: '#adb5bd',
+  },
+
+  // Arrow Container
+  arrowContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    zIndex: 1,
+  },
+
+  // RTL
+  rtl: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
 });

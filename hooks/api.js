@@ -112,5 +112,17 @@ export const api = {
   getMessage: (fingerData, time) => sendRequest('m_message', {
     finger: fingerData,
     time
+  }),
+
+  // دریافت فرم
+  forms: (fingerData, time) => sendRequest('m_forms', {
+    finger: fingerData,
+    time
+  }),
+
+  // دریافت فرم
+  news: (fingerData, time) => sendRequest('m_news', {
+    finger: fingerData,
+    time
   })
 };

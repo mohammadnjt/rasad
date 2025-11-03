@@ -21,30 +21,32 @@ import {
   CheckCircle2,
   AlertCircle,
   Wifi,
-  WifiOff,
   ArrowRight
 } from 'lucide-react-native';
 
 export default function ServerConfigScreen() {
   const router = useRouter();
-  const {setVersion} = useStore();
+  const {setVersion, isDarkMode} = useStore();
   const [serverUrl, setServerUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState(null); // null, 'success', 'error'
+  const [connectionStatus, setConnectionStatus] = useState(null);
   const [error, setError] = useState('');
 
-  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  // انیمیشن‌های بک‌گراند دایره‌ها
+  const bgPulseAnims = useRef([
+    new Animated.Value(1),
+    new Animated.Value(1),
+    new Animated.Value(1),
+  ]).current;
 
   useEffect(() => {
-    // Entry animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 600,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
@@ -55,24 +57,27 @@ export default function ServerConfigScreen() {
       }),
     ]).start();
 
-    // Check if server is already configured
     checkExistingConfig();
+  }, []);
 
-    // Pulse animation for server icon
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.15,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+  useEffect(() => {
+    // انیمیشن pulse برای دایره‌های بک‌گراند
+    bgPulseAnims.forEach((anim, index) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1.2,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    });
   }, []);
 
   const checkExistingConfig = async () => {
@@ -87,22 +92,11 @@ export default function ServerConfigScreen() {
     }
   };
 
-  const shakeAnimation = () => {
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 100, duration: 100, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 100, duration: 100, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 10, duration: 100, duration: 100, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 100, duration: 100, useNativeDriver: true }),
-    ]).start();
-  };
-
   const validateUrl = (url) => {
-    // Remove http:// or https:// if user entered it
     let cleanUrl = url.trim().toLowerCase();
     cleanUrl = cleanUrl.replace(/^https?:\/\//, '');
-    cleanUrl = cleanUrl.replace(/\/$/, ''); // Remove trailing slash
+    cleanUrl = cleanUrl.replace(/\/$/, '');
     
-    // Check if it's a valid domain format
     const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-_.]+\.[a-zA-Z]{2,}$/;
     
     return {
@@ -112,56 +106,49 @@ export default function ServerConfigScreen() {
   };
 
   const testConnection = async (url) => {
-  try {
-    const baseUrl = `https://${url}/modules.php`;
+    try {
+      const baseUrl = `https://${url}/modules.php`;
 
-    const formData = new URLSearchParams();
-    formData.append('name', 'Icms');
-    formData.append('file', 'json');
-    formData.append('op', 'm_version');
+      const formData = new URLSearchParams();
+      formData.append('name', 'Icms');
+      formData.append('file', 'json');
+      formData.append('op', 'm_version');
 
-    const response = await fetch(baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-      },
-      body: formData.toString()
-    });
+      const response = await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: formData.toString()
+      });
 
-    // const text = await response.text();
-    // console.log('POST Response text:', text);
-
-    if (response.ok) {
-      // const jsonData = JSON.parse(text);
-      // console.log(jsonData)
-      const jsonData = await response.json();
-      setVersion({...jsonData, baseUrl, serverUrl: `https://${url}`})
-      // await AsyncStorage.setItem('version', JSON.stringify({...jsonData, baseUrl, serverUrl: `https://${url}`}));
-
-      return { success: true, data: jsonData };
-    } else {
+      if (response.ok) {
+        const jsonData = await response.json();
+        setVersion({...jsonData, baseUrl, serverUrl: `https://${url}`})
+        return { success: true, data: jsonData };
+      } else {
+        return { 
+          success: false, 
+          error: `خطای سرور: ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error('Full error:', error);
       return { 
         success: false, 
-        error: `خطای سرور: ${response.status}`
+        error: 'عدم اتصال به سرور',
+        details: error.message
       };
     }
-  } catch (error) {
-    console.error('Full error:', error);
-    return { 
-      success: false, 
-      error: 'عدم اتصال به سرور',
-      details: error.message
-    };
-  }
-};
+  };
+
   const handleConnect = async () => {
     setError('');
     setConnectionStatus(null);
 
     if (!serverUrl.trim()) {
       setError('لطفا آدرس سرور را وارد کنید');
-      shakeAnimation();
       return;
     }
 
@@ -169,13 +156,11 @@ export default function ServerConfigScreen() {
     
     if (!validation.isValid) {
       setError('فرمت آدرس سرور صحیح نیست');
-      shakeAnimation();
       return;
     }
 
     setLoading(true);
 
-    // Test connection
     const result = await testConnection(validation.cleanUrl);
     console.log('result',result)
 
@@ -184,9 +169,7 @@ export default function ServerConfigScreen() {
     if (result.success) {
       setConnectionStatus('success');
       
-      // Save to storage
       try {       
-        // Success animation
         setTimeout(() => {
           Alert.alert(
             '✓ موفق',
@@ -206,7 +189,6 @@ export default function ServerConfigScreen() {
     } else {
       setConnectionStatus('error');
       setError(result.error);
-      shakeAnimation();
     }
   };
 
@@ -231,26 +213,56 @@ export default function ServerConfigScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Background Gradient */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2', '#f093fb']}
-        style={styles.backgroundGradient}
-      />
-
-      {/* Decorative Circles */}
-      <Animated.View 
-        style={[
-          styles.decorativeCircle1,
-          { opacity: fadeAnim }
-        ]} 
-      />
-      <Animated.View 
-        style={[
-          styles.decorativeCircle2,
-          { opacity: fadeAnim }
-        ]} 
-      />
+    <View style={[styles.container, isDarkMode && styles.containerDark]}>
+      {/* Background Pattern */}
+      <View style={styles.backgroundContainer}>
+        <LinearGradient
+          colors={
+            isDarkMode 
+              ? ['#1a1d29', '#212529', '#2d3139']
+              : ['#f8f9fa', '#e9ecef', '#dee2e6']
+          }
+          style={styles.backgroundGradient}
+        />
+        {/* Dots Pattern */}
+        <View style={styles.dotsPattern}>
+          {[...Array(50)].map((_, i) => (
+            <View 
+              key={i} 
+              style={[
+                styles.dot,
+                isDarkMode ? styles.dotDark : styles.dotLight,
+                {
+                  left: `${(i % 10) * 10}%`,
+                  top: `${Math.floor(i / 10) * 20}%`,
+                }
+              ]} 
+            />
+          ))}
+        </View>
+        {/* دایره‌های دکوراتیو متحرک در بک‌گراند */}
+        <Animated.View 
+          style={[
+            styles.bgDecorativeCircle1, 
+            isDarkMode ? styles.bgDecorativeCircleDark : styles.bgDecorativeCircleLight,
+            { transform: [{ scale: bgPulseAnims[0] }] }
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.bgDecorativeCircle2, 
+            isDarkMode ? styles.bgDecorativeCircleDark : styles.bgDecorativeCircleLight,
+            { transform: [{ scale: bgPulseAnims[1] }] }
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.bgDecorativeCircle3, 
+            isDarkMode ? styles.bgDecorativeCircleDark : styles.bgDecorativeCircleLight,
+            { transform: [{ scale: bgPulseAnims[2] }] }
+          ]} 
+        />
+      </View>
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -265,163 +277,147 @@ export default function ServerConfigScreen() {
             }
           ]}
         >
-          {/* Server Icon */}
-          <Animated.View 
-            style={[
-              styles.serverIconContainer,
-              { transform: [{ scale: pulseAnim }] }
-            ]}
-          >
-            <LinearGradient
-              colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
-              style={styles.serverIconGradient}
-            >
-              <Server size={64} color="#fff" strokeWidth={2} />
-            </LinearGradient>
-          </Animated.View>
+          {/* Header Section */}
+          <View style={styles.header}>
+            <View style={styles.iconContainer}>
+              <LinearGradient
+                colors={['#4A90E2', '#357ABD']}
+                style={styles.iconGradient}
+              >
+                <Server size={32} color="#fff" strokeWidth={2.5} />
+              </LinearGradient>
+            </View>
 
-          {/* Title */}
-          <Text style={styles.title}>تنظیمات سرور</Text>
-          <Text style={styles.subtitle}>
-            آدرس سرور را برای اتصال وارد کنید
-          </Text>
+            <Text style={styles.title}>پیکربندی سرور</Text>
+            <Text style={styles.subtitle}>
+              برای استفاده از سامانه، آدرس سرور را وارد کنید
+            </Text>
+          </View>
 
-          {/* Form Card */}
-          <Animated.View 
-            style={[
-              styles.formCard,
-              { transform: [{ translateX: shakeAnim }] }
-            ]}
-          >
-            <View style={styles.glassOverlay} />
-            
-            <View style={styles.formContent}>
-              {/* Example */}
-              <View style={styles.exampleContainer}>
-                <Globe size={16} color="#667eea" />
-                <Text style={styles.exampleText}>
-                  مثال: rasad.feham.ir
-                </Text>
-              </View>
-
-              {/* Input */}
-              <View style={styles.inputContainer}>
-                <View style={styles.inputWrapper}>
-                  <View style={styles.protocolBadge}>
-                    <Text style={styles.protocolText}>https://</Text>
-                  </View>
-                  <TextInput
-                    style={styles.input}
-                    value={serverUrl}
-                    onChangeText={setServerUrl}
-                    placeholder="rasad.feham.ir"
-                    placeholderTextColor="#999"
-                    keyboardType="url"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  {connectionStatus && (
-                    <View style={styles.statusIcon}>
-                      {connectionStatus === 'success' ? (
-                        <CheckCircle2 size={20} color="#28A745" />
-                      ) : (
-                        <AlertCircle size={20} color="#DC3545" />
-                      )}
-                    </View>
-                  )}
+          {/* Main Card */}
+          <View style={styles.mainCard}>
+            {/* Server URL Input */}
+            <View style={styles.inputSection}>
+              <Text style={styles.label}>آدرس سرور</Text>
+              
+              <View style={[
+                styles.inputWrapper,
+                error && styles.inputWrapperError,
+                connectionStatus === 'success' && styles.inputWrapperSuccess
+              ]}>
+                <View style={styles.prefixContainer}>
+                  <Text style={styles.prefixText}>https://</Text>
                 </View>
-                {error && (
-                  <View style={styles.errorContainer}>
-                    <AlertCircle size={14} color="#DC3545" />
-                    <Text style={styles.errorText}>{error}</Text>
-                  </View>
+                
+                <TextInput
+                  style={styles.input}
+                  value={serverUrl}
+                  onChangeText={(text) => {
+                    setServerUrl(text);
+                    setError('');
+                    setConnectionStatus(null);
+                  }}
+                  placeholder="example.domain.com"
+                  placeholderTextColor="#adb5bd"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                />
+
+                {connectionStatus === 'success' && (
+                  <CheckCircle2 size={20} color="#28a745" style={styles.statusIcon} />
                 )}
               </View>
 
-              {/* Connection Info */}
-              <View style={styles.infoCard}>
-                <View style={styles.infoHeader}>
-                  <Wifi size={16} color="#667eea" />
-                  <Text style={styles.infoTitle}>نحوه اتصال</Text>
+              {error && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle size={14} color="#dc3545" />
+                  <Text style={styles.errorText}>{error}</Text>
                 </View>
-                <Text style={styles.infoText}>
-                  سرور باید در آدرس /moduls.php پاسخگو باشد
-                </Text>
-                <Text style={styles.infoExample}>
-                  مثال: https://rasad.feham.ir/moduls.php
+              )}
+
+              {/* Example */}
+              <View style={styles.hintContainer}>
+                <Globe size={14} color="#6c757d" />
+                <Text style={styles.hintText}>
+                  مثال: rasad.feham.ir
                 </Text>
               </View>
-
-              {/* Connect Button */}
-              <TouchableOpacity
-                style={styles.connectButton}
-                onPress={handleConnect}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={['#667eea', '#764ba2']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.connectGradient}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <>
-                      <Text style={styles.connectText}>اتصال به سرور</Text>
-                      <ArrowRight size={20} color="#fff" />
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {/* Skip Button */}
-              <TouchableOpacity
-                style={styles.skipButton}
-                onPress={handleSkip}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.skipText}>رد شدن این مرحله</Text>
-              </TouchableOpacity>
             </View>
-          </Animated.View>
 
-          {/* Connection Status Cards */}
+            {/* Info Box */}
+            <View style={styles.infoBox}>
+              <View style={styles.infoHeader}>
+                <Wifi size={16} color="#4A90E2" />
+                <Text style={styles.infoTitle}>نکته</Text>
+              </View>
+              <Text style={styles.infoText}>
+                سرور باید در مسیر <Text style={styles.infoPath}>/modules.php</Text> پاسخگو باشد
+              </Text>
+            </View>
+
+            {/* Buttons */}
+            <TouchableOpacity
+              style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+              onPress={handleConnect}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={loading ? ['#adb5bd', '#adb5bd'] : ['#4A90E2', '#357ABD']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonGradient}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.primaryButtonText}>اتصال به سرور</Text>
+                    <ArrowRight size={18} color="#fff" />
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleSkip}
+              activeOpacity={0.7}
+              disabled={loading}
+            >
+              <Text style={styles.secondaryButtonText}>رد کردن این مرحله</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Success/Error Message */}
           {connectionStatus && (
             <Animated.View 
               style={[
-                styles.statusCard,
-                connectionStatus === 'success' ? styles.statusCardSuccess : styles.statusCardError
+                styles.messageCard,
+                connectionStatus === 'success' ? styles.messageCardSuccess : styles.messageCardError
               ]}
             >
-              {connectionStatus === 'success' ? (
-                <>
-                  <CheckCircle2 size={24} color="#28A745" />
-                  <View style={styles.statusTextContainer}>
-                    <Text style={styles.statusTitle}>اتصال موفق</Text>
-                    <Text style={styles.statusMessage}>
-                      سرور با موفقیت پیکربندی شد
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <WifiOff size={24} color="#DC3545" />
-                  <View style={styles.statusTextContainer}>
-                    <Text style={styles.statusTitle}>خطا در اتصال</Text>
-                    <Text style={styles.statusMessage}>
-                      لطفا آدرس سرور را بررسی کنید
-                    </Text>
-                  </View>
-                </>
-              )}
+              <View style={styles.messageContent}>
+                {connectionStatus === 'success' ? (
+                  <>
+                    <CheckCircle2 size={20} color="#28a745" />
+                    <Text style={styles.messageText}>اتصال با موفقیت برقرار شد</Text>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle size={20} color="#dc3545" />
+                    <Text style={styles.messageText}>عدم اتصال به سرور</Text>
+                  </>
+                )}
+              </View>
             </Animated.View>
           )}
 
           {/* Footer */}
-          <Text style={styles.footerText}>
-            نسخه ۱.۱ • توسعه یافته توسط شرکت فهام
+          <Text style={styles.footer}>
+            نسخه ۱.۱ • شرکت فهام
           </Text>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -432,271 +428,307 @@ export default function ServerConfigScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#667eea',
+    backgroundColor: '#f8f9fa',
+  },
+  containerDark: {
+    backgroundColor: '#1a1d29',
+  },
+  
+  // Background
+  backgroundContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: -1,
   },
   backgroundGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
   },
-  decorativeCircle1: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    top: -100,
-    right: -100,
+  dotsPattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.4,
   },
-  decorativeCircle2: {
+  dot: {
+    position: 'absolute',
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+  },
+  dotLight: {
+    backgroundColor: '#4A90E2',
+    opacity: 0.15,
+  },
+  dotDark: {
+    backgroundColor: '#6ca8e8',
+    opacity: 0.1,
+  },
+
+  // دایره‌های دکوراتیو متحرک در بک‌گراند
+  bgDecorativeCircle1: {
     position: 'absolute',
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    bottom: -50,
-    left: -50,
+    top: '10%',
+    left: '-10%',
+    opacity: 0.08,
   },
+  bgDecorativeCircle2: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    bottom: '20%',
+    right: '-15%',
+    opacity: 0.06,
+  },
+  bgDecorativeCircle3: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    top: '50%',
+    left: '40%',
+    opacity: 0.07,
+  },
+  bgDecorativeCircleLight: {
+    backgroundColor: '#4A90E2',
+  },
+  bgDecorativeCircleDark: {
+    backgroundColor: '#6ca8e8',
+  },
+  
   keyboardView: {
     flex: 1,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
 
-  // Server Icon
-  serverIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    overflow: 'hidden',
-    alignSelf: 'center',
+  // Header
+  header: {
+    alignItems: 'center',
     marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
   },
-  serverIconGradient: {
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  iconGradient: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // Title
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
+    color: '#212529',
+    marginBottom: 8,
     textAlign: 'center',
-    marginBottom: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
   },
   subtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 15,
+    color: '#6c757d',
     textAlign: 'center',
-    marginBottom: 40,
-    fontWeight: '500',
+    lineHeight: 22,
   },
 
-  // Form Card
-  formCard: {
-    borderRadius: 32,
-    overflow: 'hidden',
-    marginBottom: 24,
+  // Main Card
+  mainCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  glassOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  formContent: {
-    padding: 28,
-    position: 'relative',
-    zIndex: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 20,
   },
 
-  // Example
-  exampleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+  // Input Section
+  inputSection: {
+    marginBottom: 24,
   },
-  exampleText: {
-    fontSize: 13,
-    color: '#666',
+  label: {
+    fontSize: 14,
     fontWeight: '600',
-  },
-
-  // Input
-  inputContainer: {
-    marginBottom: 20,
+    color: '#495057',
+    marginBottom: 10,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: '#e9ecef',
     overflow: 'hidden',
   },
-  protocolBadge: {
-    backgroundColor: '#667eea',
-    paddingHorizontal: 12,
-    paddingVertical: 16,
+  inputWrapperError: {
+    borderColor: '#dc3545',
+    backgroundColor: '#fff5f5',
   },
-  protocolText: {
+  inputWrapperSuccess: {
+    borderColor: '#28a745',
+    backgroundColor: '#f0fff4',
+  },
+  prefixContainer: {
+    backgroundColor: '#e9ecef',
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+  },
+  prefixText: {
     fontSize: 14,
-    color: '#fff',
-    fontWeight: '700',
+    fontWeight: '600',
+    color: '#495057',
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#333',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    fontSize: 15,
+    color: '#212529',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     direction: 'ltr',
     textAlign: 'left',
   },
   statusIcon: {
-    paddingRight: 12,
+    marginRight: 12,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 8,
-    marginRight: 4,
+    paddingHorizontal: 4,
   },
   errorText: {
-    fontSize: 12,
-    color: '#DC3545',
+    fontSize: 13,
+    color: '#dc3545',
     fontWeight: '500',
   },
+  hintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  hintText: {
+    fontSize: 12,
+    color: '#6c757d',
+  },
 
-  // Info Card
-  infoCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    padding: 16,
+  // Info Box
+  infoBox: {
+    backgroundColor: '#f0f7ff',
+    borderRadius: 10,
+    padding: 14,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: '#d0e7ff',
   },
   infoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   infoTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#333',
+    color: '#4A90E2',
   },
   infoText: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-  infoExample: {
     fontSize: 12,
-    color: '#667eea',
-    fontWeight: '600',
+    color: '#495057',
+    lineHeight: 18,
+  },
+  infoPath: {
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    direction: 'ltr',
+    fontWeight: '600',
+    color: '#4A90E2',
   },
 
-  // Connect Button
-  connectButton: {
-    borderRadius: 16,
+  // Buttons
+  primaryButton: {
+    borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    marginBottom: 12,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  connectGradient: {
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 18,
+    paddingVertical: 16,
     gap: 8,
   },
-  connectText: {
-    fontSize: 18,
+  primaryButtonText: {
+    fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: '#ffffff',
   },
-
-  // Skip Button
-  skipButton: {
+  secondaryButton: {
     alignItems: 'center',
     paddingVertical: 12,
   },
-  skipText: {
+  secondaryButtonText: {
     fontSize: 14,
-    color: '#666',
+    color: '#6c757d',
     fontWeight: '600',
   },
 
-  // Status Card
-  statusCard: {
+  // Message Card
+  messageCard: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  messageCardSuccess: {
+    backgroundColor: '#d4edda',
+    borderWidth: 1,
+    borderColor: '#c3e6cb',
+  },
+  messageCardError: {
+    backgroundColor: '#f8d7da',
+    borderWidth: 1,
+    borderColor: '#f5c6cb',
+  },
+  messageContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
   },
-  statusCardSuccess: {
-    backgroundColor: 'rgba(40, 167, 69, 0.15)',
-  },
-  statusCardError: {
-    backgroundColor: 'rgba(220, 53, 69, 0.15)',
-  },
-  statusTextContainer: {
-    flex: 1,
-  },
-  statusTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  statusMessage: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.85)',
+  messageText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#495057',
   },
 
   // Footer
-  footerText: {
+  footer: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#adb5bd',
     textAlign: 'center',
     fontWeight: '500',
   },
